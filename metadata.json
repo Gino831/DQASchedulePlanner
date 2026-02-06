@@ -1,0 +1,5 @@
+{
+  "name": "DQA 簡易時程評估",
+  "description": "專業的 DQA 測試項目規劃與時程估算工具，支援 Moxa, Railway, Marine, Power Station 等多種工業標準，具備樣本策略優化與關鍵路徑分析功能。",
+  "requestFramePermissions": []
+}

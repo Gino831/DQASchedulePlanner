@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DQA 簡易時程規畫 - 啟動頁</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 50px 40px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        h1 {
+            color: #333;
+            font-size: 32px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 40px;
+        }
+        
+        .launch-btn {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 20px;
+            font-weight: 600;
+            padding: 18px 50px;
+            border-radius: 50px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+            cursor: pointer;
+            border: none;
+        }
+        
+        .launch-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.6);
+        }
+        
+        .launch-btn:active {
+            transform: translateY(-1px);
+        }
+        
+        .info {
+            margin-top: 40px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            text-align: left;
+        }
+        
+        .info h3 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .info h3::before {
+            content: "💡";
+            margin-right: 10px;
+            font-size: 24px;
+        }
+        
+        .info ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .info li {
+            color: #666;
+            margin-bottom: 10px;
+            padding-left: 25px;
+            position: relative;
+        }
+        
+        .info li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        .version {
+            margin-top: 30px;
+            color: #999;
+            font-size: 14px;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .container {
+            animation: fadeIn 0.6s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 DQA 簡易時程規畫</h1>
+        <p class="subtitle">Design Quality Assurance Schedule Planner</p>
+        
+        <button class="launch-btn" onclick="launchApp()">
+            開始使用
+        </button>
+        
+        <div class="info">
+            <h3>功能特色</h3>
+            <ul>
+                <li>支援四大應用標準（Moxa、Railway、Marine、Power Station）</li>
+                <li>智慧時程評估與樣品需求計算</li>
+                <li>測試項目自訂與管理</li>
+                <li>資料匯入/匯出功能</li>
+                <li>完全離線使用，資料儲存在本地</li>
+            </ul>
+        </div>
+        
+        <div class="version">
+            版本 1.0.0 | Moxa DQA Team | 2026
+        </div>
+    </div>
+    
+    <script>
+        function launchApp() {
+            // 嘗試開啟應用程式
+            window.location.href = 'index.html';
+        }
+        
+        // 檢查是否支援所需功能
+        window.addEventListener('load', function() {
+            if (!window.localStorage) {
+                alert('您的瀏覽器不支援 localStorage，部分功能可能無法使用。\n建議使用 Chrome、Edge 或 Firefox 最新版本。');
+            }
+        });
+    </script>
+</body>
+</html>
