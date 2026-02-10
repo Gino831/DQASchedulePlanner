@@ -34,7 +34,7 @@
 
 - **包裝測試樣品策略**
   - 延用 Track A 樣品（需 +7 天整理）
-  - 獨立樣品（不需 +7 天，但增加組數）
+  - 獨立樣品（不需 +7 天，但增加樣品數量）
 
 ### 4. 動態管理
 
@@ -103,7 +103,7 @@ npm run preview
 3. **設定執行策略** - 選擇測試執行方式（串列/平行）與包裝樣品策略
 4. **查看評估結果** - 系統自動計算：
    - 各測試軌所需時程
-   - 所需樣品組數
+   - 所需樣品數量
    - 測試項目數量
    - 詳細測試清單
 
@@ -165,28 +165,16 @@ Compress-Archive -Path dist\* -DestinationPath DQA-SchedulePlanner.zip
 
 **選項 3：GitHub Pages 部署（推薦 - 免費線上託管）**
 
-1. 在 GitHub 建立 Repository（名稱建議：`DQASchedulePlanner`）
-2. 將專案推送到 GitHub：
+**📍 GitHub Repository**: <https://github.com/Gino831/DQASchedulePlanner>
 
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git branch -M main
-   git remote add origin https://github.com/YOUR_USERNAME/DQASchedulePlanner.git
-   git push -u origin main
-   ```
-
-3. 到 GitHub Repository → Settings → Pages
-4. Source 選擇「GitHub Actions」
-5. 推送後會自動部署，網址為：`https://YOUR_USERNAME.github.io/DQASchedulePlanner/`
+**🌐 線上版本（GitHub Pages）**: <https://Gino831.github.io/DQASchedulePlanner/>
 
 **Confluence 嵌入方法**
 
-部署到 GitHub Pages 後，可用 iframe 嵌入 Confluence：
+可用 iframe 嵌入 Confluence：
 
 ```html
-<iframe src="https://YOUR_USERNAME.github.io/DQASchedulePlanner/" 
+<iframe src="https://Gino831.github.io/DQASchedulePlanner/" 
         width="100%" height="800px" frameborder="0"></iframe>
 ```
 

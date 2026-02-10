@@ -32,7 +32,7 @@ export enum ExecutionStrategy {
 
 export enum PkgSampleStrategy {
   REUSE = 'REUSE', // 延用 Track A 樣品 (需 +7 天整理)
-  INDEPENDENT = 'INDEPENDENT' // 獨立樣品 (不需 +7 天，但增加組數)
+  INDEPENDENT = 'INDEPENDENT' // 獨立樣品 (不需 +7 天，但增加樣品數量)
 }
 
 export interface SelectedTests {

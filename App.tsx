@@ -93,6 +93,7 @@ const App: React.FC = () => {
 
   const [editingStandard, setEditingStandard] = useState<{ isNew: boolean, data: Partial<StandardData> } | null>(null);
   const [editingTest, setEditingTest] = useState<{ standardId: string, isNew: boolean, data: Partial<TestItem> } | null>(null);
+  const [mobileSettingsOpen, setMobileSettingsOpen] = useState<boolean>(false);
 
   useEffect(() => {
     localStorage.setItem('dqa_planner_v13', JSON.stringify(standards));
@@ -318,7 +319,7 @@ const App: React.FC = () => {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+      <main className="flex-1 flex flex-col md:h-screen md:overflow-hidden">
 
         {/* Gantt / Summary Header */}
         <section className="bg-white border-b border-slate-200 p-6 lg:px-10 shrink-0 shadow-sm z-10">
@@ -410,7 +411,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">樣本需求組數</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">樣品數量</p>
                   <div className="flex items-baseline justify-end text-slate-900">
                     <span className="text-5xl font-light tabular-nums leading-none tracking-tighter">{calculationResults.totalUnits}</span>
                     <span className="text-xs font-bold ml-1 uppercase">Sets</span>
@@ -422,7 +423,7 @@ const App: React.FC = () => {
         </section>
 
         {/* Workspace: Test Group Details */}
-        <div className="flex-1 overflow-y-auto p-6 lg:p-10">
+        <div className="flex-1 md:overflow-y-auto p-6 lg:p-10 pb-28 xl:pb-10">
           <div className="max-w-6xl mx-auto flex flex-col xl:flex-row gap-10">
 
             <div className="flex-1 space-y-10">
@@ -491,8 +492,8 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {/* Controls Side Panel - Fixed Options */}
-            <aside className="xl:w-80 shrink-0 space-y-6">
+            {/* Controls Side Panel - Hidden on mobile, shown on xl+ */}
+            <aside className="hidden xl:block xl:w-80 shrink-0 space-y-6">
               <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl space-y-8 sticky top-6 border border-slate-800">
                 <div className="text-center">
                   <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2">Strategy Settings</h3>
@@ -502,10 +503,10 @@ const App: React.FC = () => {
                 <div className="space-y-6">
                   {/* Sample Requirements */}
                   <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">樣品組數需求分配</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">樣品數量需求分配</label>
                     <div className="space-y-2">
                       <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                        <span className="text-[10px] font-bold text-slate-400">Track A 組數</span>
+                        <span className="text-[10px] font-bold text-slate-400">Track A 樣品數量</span>
                         <div className="flex items-center gap-3">
                           <button onClick={() => setEnvSampleCount(Math.max(1, envSampleCount - 1))} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
                           <span className="w-4 text-center font-bold tabular-nums">{envSampleCount}</span>
@@ -513,7 +514,7 @@ const App: React.FC = () => {
                         </div>
                       </div>
                       <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                        <span className="text-[10px] font-bold text-slate-400">Track B 組數</span>
+                        <span className="text-[10px] font-bold text-slate-400">Track B 樣品數量</span>
                         <div className="flex items-center gap-3">
                           <button onClick={() => setMechSampleCount(Math.max(0, mechSampleCount - 1))} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
                           <span className="w-4 text-center font-bold tabular-nums">{mechSampleCount}</span>
@@ -522,7 +523,7 @@ const App: React.FC = () => {
                       </div>
                       {pkgStrategy === PkgSampleStrategy.INDEPENDENT && (
                         <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                          <span className="text-[10px] font-bold text-slate-400">Track C 組數</span>
+                          <span className="text-[10px] font-bold text-slate-400">Track C 樣品數量</span>
                           <div className="flex items-center gap-3">
                             <button onClick={() => setPkgSampleCount(Math.max(1, pkgSampleCount - 1))} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
                             <span className="w-4 text-center font-bold tabular-nums">{pkgSampleCount}</span>
@@ -594,6 +595,108 @@ const App: React.FC = () => {
                 </div>
               </div>
             </aside>
+
+            {/* 手機版浮動底部控制面板 - 僅在 xl 以下顯示 */}
+            {mobileSettingsOpen && (
+              <div className="fixed inset-0 bg-black/40 xl:hidden z-40" onClick={() => setMobileSettingsOpen(false)} />
+            )}
+            <div className={`fixed bottom-0 left-0 right-0 xl:hidden bg-slate-900 border-t border-slate-700 z-50 transition-all duration-300 ${mobileSettingsOpen ? 'rounded-t-3xl' : ''}`}>
+              {/* 展開時的完整設定面板 */}
+              {mobileSettingsOpen && (
+                <div className="p-5 pt-2 space-y-4 max-h-[70vh] overflow-y-auto">
+                  {/* 拖曳指示條 */}
+                  <div className="flex justify-center py-2">
+                    <div className="w-10 h-1 bg-slate-600 rounded-full"></div>
+                  </div>
+
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] text-center">Strategy Settings</h3>
+
+                  {/* 樣品數量 - Track A / B 分開 */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">樣品數量需求</label>
+                    <div className="flex gap-2">
+                      <div className="flex-1 flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
+                        <span className="text-[10px] font-bold text-slate-400">Track A</span>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setEnvSampleCount(Math.max(1, envSampleCount - 1))} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
+                          <span className="w-5 text-center font-bold tabular-nums text-white">{envSampleCount}</span>
+                          <button onClick={() => setEnvSampleCount(envSampleCount + 1)} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
+                        </div>
+                      </div>
+                      <div className="flex-1 flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
+                        <span className="text-[10px] font-bold text-slate-400">Track B</span>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setMechSampleCount(Math.max(0, mechSampleCount - 1))} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
+                          <span className="w-5 text-center font-bold tabular-nums text-white">{mechSampleCount}</span>
+                          <button onClick={() => setMechSampleCount(mechSampleCount + 1)} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
+                        </div>
+                      </div>
+                    </div>
+                    {pkgStrategy === PkgSampleStrategy.INDEPENDENT && (
+                      <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
+                        <span className="text-[10px] font-bold text-slate-400">Track C</span>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setPkgSampleCount(Math.max(1, pkgSampleCount - 1))} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
+                          <span className="w-5 text-center font-bold tabular-nums text-white">{pkgSampleCount}</span>
+                          <button onClick={() => setPkgSampleCount(pkgSampleCount + 1)} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Storage 策略 */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Storage 類別執行</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => setStorageStrategy(ExecutionStrategy.SERIAL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${storageStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>串聯模式</button>
+                      <button onClick={() => setStorageStrategy(ExecutionStrategy.PARALLEL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${storageStrategy === ExecutionStrategy.PARALLEL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>並行模式</button>
+                    </div>
+                  </div>
+
+                  {/* PKG 策略 */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PKG 樣品策略</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => setPkgStrategy(PkgSampleStrategy.REUSE)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${pkgStrategy === PkgSampleStrategy.REUSE ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>延用樣品</button>
+                      <button onClick={() => setPkgStrategy(PkgSampleStrategy.INDEPENDENT)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${pkgStrategy === PkgSampleStrategy.INDEPENDENT ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>獨立樣品</button>
+                    </div>
+                    <p className="text-[9px] text-slate-500 text-center italic">{pkgStrategy === PkgSampleStrategy.REUSE ? '💡 延用樣品需增加 7 天前置整理時間' : '💡 獨立樣品不需整理時間，但需額外樣品'}</p>
+                  </div>
+
+                  {/* 主關鍵路徑策略 */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">主關鍵路徑策略</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => setStrategy(ExecutionStrategy.SERIAL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${calculationResults.currentStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>總程串聯</button>
+                      <button disabled={calculationResults.totalUnits <= 1} onClick={() => setStrategy(ExecutionStrategy.PARALLEL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'} disabled:opacity-20`}>總程並聯</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 底部常駐摘要列 - 點擊展開/收合 */}
+              <div className="p-4" onClick={() => setMobileSettingsOpen(!mobileSettingsOpen)}>
+                <div className="flex items-center justify-between gap-3 max-w-lg mx-auto">
+                  <div className="flex items-center gap-3 text-white">
+                    <span className="text-[10px] font-bold text-slate-400">A:</span>
+                    <span className="font-bold tabular-nums text-sm">{envSampleCount}</span>
+                    <span className="text-slate-600">|</span>
+                    <span className="text-[10px] font-bold text-slate-400">B:</span>
+                    <span className="font-bold tabular-nums text-sm">{mechSampleCount}</span>
+                    {pkgStrategy === PkgSampleStrategy.INDEPENDENT && (<>
+                      <span className="text-slate-600">|</span>
+                      <span className="text-[10px] font-bold text-slate-400">C:</span>
+                      <span className="font-bold tabular-nums text-sm">{pkgSampleCount}</span>
+                    </>)}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[9px] font-bold px-2 py-1 rounded-lg ${pkgStrategy === PkgSampleStrategy.REUSE ? 'bg-indigo-600/30 text-indigo-300' : 'bg-amber-600/30 text-amber-300'}`}>{pkgStrategy === PkgSampleStrategy.REUSE ? '延用' : '獨立'}</span>
+                    <span className={`text-[9px] font-bold px-2 py-1 rounded-lg ${calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? 'bg-emerald-600/30 text-emerald-300' : 'bg-slate-600/30 text-slate-300'}`}>{calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? '並聯' : '串聯'}</span>
+                    <svg className={`w-4 h-4 text-slate-400 transition-transform ${mobileSettingsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M5 15l7-7 7 7" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </main>
