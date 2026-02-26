@@ -283,22 +283,25 @@ const App: React.FC = () => {
       let pkgDays = 0;
 
       let bfDays = 0;
+      let pkgBfDays = 0; // NEW: separate BF days specifically for PKG
 
       Object.entries(standard.categories).forEach(([cat, items]) => {
         const catType = cat as CategoryType;
         (items as any[] | undefined)?.forEach(item => {
           if (selectedMap[item.id]) {
             const nameLower = item.name.toLowerCase();
-            const isPkg = nameLower.includes('pkg');
+            const isPkg = nameLower.includes('pkg') || nameLower.includes('包裝');
             const isStorage = nameLower.includes('storage');
             const isAltitude = nameLower.includes('altitude') || item.name.includes('高空');
             const isBF = nameLower.includes('basic function') || item.name.includes('基本功能');
             const isConnector = (nameLower.includes('connector') || item.name.includes('插拔') || nameLower.includes('durability')) && !isAltitude && !isStorage && !isPkg && !isBF;
-            
+
             // ipOther includes DUST, WATER, OTHER categories (except altitude and connector)
             const isIpOtherCategory = [CategoryType.DUST_TEST, CategoryType.WATER_TEST, CategoryType.OTHER].includes(catType);
 
-            if (isBF) {
+            if (isPkg && isBF) {
+              pkgBfDays += item.duration; // It's uniquely a PKG Basic Function
+            } else if (isBF) {
               bfDays += item.duration;
             } else if (isPkg) {
               pkgSegments.push({ label: CATEGORY_COLORS.pkg.label, days: item.duration, bg: CATEGORY_COLORS.pkg.bg, text: CATEGORY_COLORS.pkg.text });
@@ -307,19 +310,19 @@ const App: React.FC = () => {
               storageSegments.push({ label: CATEGORY_COLORS.storage.label, days: item.duration, bg: CATEGORY_COLORS.storage.bg, text: CATEGORY_COLORS.storage.text });
               totalStorageDays += item.duration;
             } else if (isAltitude && !isIpOtherCategory) {
-               altitudeSegments.push({ label: '✈️ (外測) ' + (CATEGORY_COLORS[catType]?.label || '高空'), days: item.duration, bg: 'bg-amber-100 border-amber-300', text: 'text-amber-800 font-bold' });
-               altitudeDays += item.duration;
+              altitudeSegments.push({ label: '✈️ (外測) ' + (CATEGORY_COLORS[catType]?.label || '高空'), days: item.duration, bg: 'bg-amber-100 border-amber-300', text: 'text-amber-800 font-bold' });
+              altitudeDays += item.duration;
             } else if (isConnector) {
-               connectorSegments.push({ label: CATEGORY_COLORS[catType]?.label || '插拔', days: item.duration, bg: CATEGORY_COLORS[catType]?.bg || 'bg-slate-100', text: CATEGORY_COLORS[catType]?.text || 'text-slate-600' });
-               connectorDays += item.duration;
+              connectorSegments.push({ label: CATEGORY_COLORS[catType]?.label || '插拔', days: item.duration, bg: CATEGORY_COLORS[catType]?.bg || 'bg-slate-100', text: CATEGORY_COLORS[catType]?.text || 'text-slate-600' });
+              connectorDays += item.duration;
             } else if (isIpOtherCategory || isAltitude) {
-               if (isAltitude) {
-                 altitudeSegments.push({ label: '✈️ (外測) 高空', days: item.duration, bg: 'bg-amber-100 border-amber-300', text: 'text-amber-800 font-bold' });
-                 altitudeDays += item.duration;
-               } else {
-                 ipOtherSegments.push({ label: CATEGORY_COLORS[catType]?.label || '其他', days: item.duration, bg: CATEGORY_COLORS[catType]?.bg || 'bg-slate-100', text: CATEGORY_COLORS[catType]?.text || 'text-slate-600' });
-                 ipOtherDays += item.duration;
-               }
+              if (isAltitude) {
+                altitudeSegments.push({ label: '✈️ (外測) 高空', days: item.duration, bg: 'bg-amber-100 border-amber-300', text: 'text-amber-800 font-bold' });
+                altitudeDays += item.duration;
+              } else {
+                ipOtherSegments.push({ label: CATEGORY_COLORS[catType]?.label || '其他', days: item.duration, bg: CATEGORY_COLORS[catType]?.bg || 'bg-slate-100', text: CATEGORY_COLORS[catType]?.text || 'text-slate-600' });
+                ipOtherDays += item.duration;
+              }
             } else if ([CategoryType.CHAMBER, CategoryType.FUNCTION].includes(catType)) {
               envBaseSegments.push({ label: CATEGORY_COLORS[catType]?.label || '環境', days: item.duration, bg: CATEGORY_COLORS[catType]?.bg || 'bg-slate-100', text: CATEGORY_COLORS[catType]?.text || 'text-slate-600' });
               envBaseDays += item.duration;
@@ -332,12 +335,13 @@ const App: React.FC = () => {
       });
 
       // --- 建立 DUT Rows ---
-      
+
       const appendBF = () => bfDays > 0 ? [{ label: CATEGORY_COLORS[CategoryType.FUNCTION]?.label || 'Basic Func', days: bfDays, bg: CATEGORY_COLORS[CategoryType.FUNCTION]?.bg || 'bg-sky-100', text: CATEGORY_COLORS[CategoryType.FUNCTION]?.text || 'text-sky-600' }] : [];
+      const appendPkgBF = () => pkgBfDays > 0 ? [{ label: 'PKG Basic Func', days: pkgBfDays, bg: 'bg-sky-100', text: 'text-sky-600' }] : [];
 
       const modelDuts: Array<any> = [];
       let rowCounter = 1;
-      const baseStartDay = strategy === ExecutionStrategy.SERIAL ? globalTrackATotal : 0; 
+      const baseStartDay = strategy === ExecutionStrategy.SERIAL ? globalTrackATotal : 0;
 
       const storageIsParallel = storageStrategy === ExecutionStrategy.PARALLEL && totalStorageDays > 0 && model.envSampleCount >= 2;
       const envDutCount = storageIsParallel ? (model.envSampleCount - 1) : model.envSampleCount;
@@ -348,7 +352,7 @@ const App: React.FC = () => {
         for (let i = 0; i < envDutCount; i++) {
           const segs = [...appendBF(), ...envBaseSegments];
           let days = bfDays + envBaseDays;
-          
+
           if (!storageIsParallel && storageSegments.length > 0) {
             segs.push(...storageSegments);
             days += totalStorageDays;
@@ -368,7 +372,7 @@ const App: React.FC = () => {
       if (storageIsParallel) {
         const segs = [...appendBF(), ...storageSegments];
         const sDays = bfDays + totalStorageDays;
-        
+
         const row = {
           id: `dut_storage_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
           track: 'A', trackLabel: 'Storage', startDay: baseStartDay, segments: segs, totalDays: sDays,
@@ -394,7 +398,7 @@ const App: React.FC = () => {
       }
 
       // 4. 智慧負載平衡 (Smart Routing)
-      
+
       // 高空 (Altitude) -> 找目前 ENV Rows 中最短的，接在後面
       if (altitudeSegments.length > 0) {
         if (envRows.length > 0) {
@@ -454,26 +458,27 @@ const App: React.FC = () => {
       }
 
       // 5. 產生 Track C (PKG)
-      if (pkgSegments.length > 0) {
+      if (pkgSegments.length > 0 || pkgBfDays > 0) { // Also proc if there's ONLY a PKG BF
         if (pkgStrategy === PkgSampleStrategy.REUSE) {
           if (envRows.length > 0) {
-             envRows.sort((a, b) => b.totalDays - a.totalDays);
-             const targetRow = envRows[0];
-             targetRow.segments.push({ label: CATEGORY_COLORS.prep.label, days: 14, bg: CATEGORY_COLORS.prep.bg, text: CATEGORY_COLORS.prep.text });
-             targetRow.segments.push(...pkgSegments);
-             targetRow.totalDays += 14 + pkgDays;
+            envRows.sort((a, b) => b.totalDays - a.totalDays);
+            const targetRow = envRows[0];
+            targetRow.segments.push({ label: CATEGORY_COLORS.prep.label, days: 14, bg: CATEGORY_COLORS.prep.bg, text: CATEGORY_COLORS.prep.text });
+            targetRow.segments.push(...appendPkgBF()); // Unique PKG basic function
+            targetRow.segments.push(...pkgSegments);
+            targetRow.totalDays += 14 + pkgBfDays + pkgDays;
           } else {
-             modelDuts.push({
-               id: `dut_pkg_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
-               track: 'C', trackLabel: 'PKG', startDay: baseStartDay, segments: [{ label: CATEGORY_COLORS.prep.label, days: 14, bg: CATEGORY_COLORS.prep.bg, text: CATEGORY_COLORS.prep.text }, ...pkgSegments], totalDays: 14 + pkgDays,
-             });
-             rowCounter++;
+            modelDuts.push({
+              id: `dut_pkg_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+              track: 'C', trackLabel: 'PKG', startDay: baseStartDay, segments: [{ label: CATEGORY_COLORS.prep.label, days: 14, bg: CATEGORY_COLORS.prep.bg, text: CATEGORY_COLORS.prep.text }, ...appendPkgBF(), ...pkgSegments], totalDays: 14 + pkgBfDays + pkgDays,
+            });
+            rowCounter++;
           }
         } else {
           for (let i = 0; i < model.pkgSampleCount; i++) {
             modelDuts.push({
               id: `dut_pkg_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
-              track: 'C', trackLabel: 'PKG', startDay: baseStartDay, segments: [...pkgSegments], totalDays: pkgDays,
+              track: 'C', trackLabel: 'PKG', startDay: baseStartDay, segments: [...appendPkgBF(), ...pkgSegments], totalDays: pkgBfDays + pkgDays,
             });
             rowCounter++;
           }
@@ -501,7 +506,9 @@ const App: React.FC = () => {
         globalTrackATotal = Math.max(globalTrackATotal, maxD); // Independent IP tracked in A's timespan
       }
 
-      const modelTotalUnits = model.envSampleCount + model.mechSampleCount + (pkgStrategy === PkgSampleStrategy.INDEPENDENT ? model.pkgSampleCount : 0) + (ipOtherSegments.length > 0 && singleSampleStrategy === SingleSampleStrategy.INDEPENDENT ? 1 : 0);
+      // NEW logic: Always add model.pkgSampleCount to totally Units because packing materials are physically needed
+      // no matter if the device body is reused from track A or newly bought.
+      const modelTotalUnits = model.envSampleCount + model.mechSampleCount + model.pkgSampleCount + (ipOtherSegments.length > 0 && singleSampleStrategy === SingleSampleStrategy.INDEPENDENT ? 1 : 0);
       globalTotalUnits += modelTotalUnits;
 
       allDutRows.push(...modelDuts);
@@ -853,16 +860,14 @@ const App: React.FC = () => {
                             <button onClick={() => updateActiveModel({ mechSampleCount: activeModel.mechSampleCount + 1 })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
                           </div>
                         </div>
-                        {pkgStrategy === PkgSampleStrategy.INDEPENDENT && (
-                          <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                            <span className="text-[10px] font-bold text-slate-400">Track C 樣品數量</span>
-                            <div className="flex items-center gap-3">
-                              <button onClick={() => updateActiveModel({ pkgSampleCount: Math.max(1, activeModel.pkgSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
-                              <span className="w-4 text-center font-bold tabular-nums">{activeModel.pkgSampleCount}</span>
-                              <button onClick={() => updateActiveModel({ pkgSampleCount: activeModel.pkgSampleCount + 1 })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
-                            </div>
+                        <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
+                          <span className="text-[10px] font-bold text-slate-400">[包裝/PKG] 樣品需求</span>
+                          <div className="flex items-center gap-3">
+                            <button onClick={() => updateActiveModel({ pkgSampleCount: Math.max(1, activeModel.pkgSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
+                            <span className="w-4 text-center font-bold tabular-nums">{activeModel.pkgSampleCount}</span>
+                            <button onClick={() => updateActiveModel({ pkgSampleCount: activeModel.pkgSampleCount + 1 })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
                           </div>
-                        )}
+                        </div>
                       </div>
                     </div>
 
@@ -1009,16 +1014,14 @@ const App: React.FC = () => {
                   </div>
                 </div>
               </div>
-              {pkgStrategy === PkgSampleStrategy.INDEPENDENT && (
-                <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                  <span className="text-[10px] font-bold text-slate-400">Track C</span>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => updateActiveModel({ pkgSampleCount: Math.max(1, activeModel.pkgSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
-                    <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.pkgSampleCount}</span>
-                    <button onClick={() => updateActiveModel({ pkgSampleCount: activeModel.pkgSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
-                  </div>
+              <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10 mt-2">
+                <span className="text-[10px] font-bold text-slate-400">[包裝/PKG] 樣品需求</span>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => updateActiveModel({ pkgSampleCount: Math.max(1, activeModel.pkgSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
+                  <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.pkgSampleCount}</span>
+                  <button onClick={() => updateActiveModel({ pkgSampleCount: activeModel.pkgSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Storage 策略 */}
@@ -1140,7 +1143,7 @@ const App: React.FC = () => {
         )
       }
 
-    </div>
+    </div >
   );
 };
 
