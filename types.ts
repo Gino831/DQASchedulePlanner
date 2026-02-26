@@ -31,20 +31,16 @@ export enum ExecutionStrategy {
 }
 
 export enum PkgSampleStrategy {
-  REUSE = 'REUSE', // 延用 Track A 樣品 (需 +7 天整理)
+  REUSE = 'REUSE', // 延用 Track A 樣品 (需 +14 天整理)
   INDEPENDENT = 'INDEPENDENT' // 獨立樣品 (不需 +7 天，但增加樣品數量)
 }
 
-export interface SelectedTests {
-  [standardId: string]: {
-    [itemId: string]: boolean;
-  };
-}
-
-export interface CategoryResult {
-  category: CategoryType;
-  duration: number;
-  testCount: number;
-  sampleCount: number;
-  items: TestItem[];
+export interface ModelEntry {
+  id: string; // Type ID (e.g. m_01)
+  name: string; // User defined model name (e.g. NAT-G102-T)
+  standardId: string; // Associated app ID (e.g. moxa, railway)
+  selectedTests: Record<string, boolean>; // Selected test items for this specific model
+  envSampleCount: number;
+  mechSampleCount: number;
+  pkgSampleCount: number;
 }
