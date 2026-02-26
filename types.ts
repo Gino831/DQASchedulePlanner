@@ -44,3 +44,8 @@ export interface ModelEntry {
   mechSampleCount: number;
   pkgSampleCount: number;
 }
+
+export enum SingleSampleStrategy {
+  AUTO = 'AUTO', // 自動找最短路徑接續
+  INDEPENDENT = 'INDEPENDENT' // 獨立樣品
+}

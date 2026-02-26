@@ -7,6 +7,7 @@ import {
   ExecutionStrategy,
   PkgSampleStrategy,
   ModelEntry,
+  SingleSampleStrategy,
 } from './types';
 import { STANDARDS_DATA as INITIAL_DATA } from './constants';
 
@@ -136,6 +137,7 @@ const App: React.FC = () => {
   const [strategy, setStrategy] = useState<ExecutionStrategy>(ExecutionStrategy.PARALLEL);
   const [storageStrategy, setStorageStrategy] = useState<ExecutionStrategy>(ExecutionStrategy.PARALLEL);
   const [pkgStrategy, setPkgStrategy] = useState<PkgSampleStrategy>(PkgSampleStrategy.REUSE);
+  const [singleSampleStrategy, setSingleSampleStrategy] = useState<SingleSampleStrategy>(SingleSampleStrategy.AUTO);
 
   const [editingStandard, setEditingStandard] = useState<{ isNew: boolean, data: Partial<StandardData> } | null>(null);
   const [editingTest, setEditingTest] = useState<{ standardId: string, isNew: boolean, data: Partial<TestItem> } | null>(null);
@@ -240,8 +242,6 @@ const App: React.FC = () => {
   };
 
   const calculationResults = useMemo(() => {
-    const envTracks = [CategoryType.CHAMBER, CategoryType.DUST_TEST, CategoryType.WATER_TEST, CategoryType.FUNCTION, CategoryType.OTHER];
-
     let finalTotalDays = 0;
     let globalTrackATotal = 0;
     let globalTrackBTotal = 0;
@@ -250,7 +250,7 @@ const App: React.FC = () => {
 
     type Seg = { label: string; days: number; bg: string; text: string };
     const allDutRows: Array<{
-      id: string; label: string; track: 'A' | 'B' | 'C'; trackLabel: string;
+      id: string; label: string; track: 'A' | 'B' | 'C' | 'D'; trackLabel: string;
       startDay: number; segments: Seg[]; totalDays: number;
     }> = [];
 
@@ -261,177 +261,232 @@ const App: React.FC = () => {
 
       const selectedMap = model.selectedTests || {};
 
-      let appEnvSum = 0;
-      let appStorageDays: number[] = [];
-      let appPkgSum = 0;
-      let appMechSum = 0;
-      const envCatDays: Record<string, number> = {};
-      let mechBfDays = 0;
-      let mechSvDays = 0;
-      let anyPkgSelected = false;
+      const envBaseSegments: Seg[] = [];
+      let envBaseDays = 0;
+
+      const storageSegments: Seg[] = [];
+      let totalStorageDays = 0;
+
+      const altitudeSegments: Seg[] = [];
+      let altitudeDays = 0;
+
+      const ipOtherSegments: Seg[] = [];
+      let ipOtherDays = 0;
+
+      const mechSegments: Seg[] = [];
+      let mechDays = 0;
+
+      const pkgSegments: Seg[] = [];
+      let pkgDays = 0;
 
       Object.entries(standard.categories).forEach(([cat, items]) => {
         const catType = cat as CategoryType;
-        (items as TestItem[] | undefined)?.forEach(item => {
+        (items as any[] | undefined)?.forEach(item => {
           if (selectedMap[item.id]) {
-            const isPkg = item.name.toLowerCase().includes('pkg');
-            const isStorage = item.name.toLowerCase().includes('storage');
+            const nameLower = item.name.toLowerCase();
+            const isPkg = nameLower.includes('pkg');
+            const isStorage = nameLower.includes('storage');
+            const isAltitude = nameLower.includes('altitude') || item.name.includes('高空');
+
+            // ipOther includes DUST, WATER, OTHER categories (except altitude)
+            const isIpOtherCategory = [CategoryType.DUST_TEST, CategoryType.WATER_TEST, CategoryType.OTHER].includes(catType);
 
             if (isPkg) {
-              appPkgSum += item.duration;
-              anyPkgSelected = true;
-            } else if (envTracks.includes(catType)) {
-              if (isStorage) {
-                appStorageDays.push(item.duration);
+              pkgSegments.push({ label: CATEGORY_COLORS.pkg.label, days: item.duration, bg: CATEGORY_COLORS.pkg.bg, text: CATEGORY_COLORS.pkg.text });
+              pkgDays += item.duration;
+            } else if (isStorage) {
+              storageSegments.push({ label: CATEGORY_COLORS.storage.label, days: item.duration, bg: CATEGORY_COLORS.storage.bg, text: CATEGORY_COLORS.storage.text });
+              totalStorageDays += item.duration;
+            } else if (isAltitude && !isIpOtherCategory) {
+              altitudeSegments.push({ label: CATEGORY_COLORS[catType]?.label || '環境', days: item.duration, bg: CATEGORY_COLORS[catType]?.bg || 'bg-slate-100', text: CATEGORY_COLORS[catType]?.text || 'text-slate-600' });
+              altitudeDays += item.duration;
+            } else if (isIpOtherCategory || isAltitude) {
+              if (isAltitude) {
+                altitudeSegments.push({ label: CATEGORY_COLORS[catType]?.label || '高空', days: item.duration, bg: CATEGORY_COLORS[catType]?.bg || 'bg-slate-100', text: CATEGORY_COLORS[catType]?.text || 'text-slate-600' });
+                altitudeDays += item.duration;
               } else {
-                appEnvSum += item.duration;
-                envCatDays[catType] = (envCatDays[catType] || 0) + item.duration;
+                ipOtherSegments.push({ label: CATEGORY_COLORS[catType]?.label || '其他', days: item.duration, bg: CATEGORY_COLORS[catType]?.bg || 'bg-slate-100', text: CATEGORY_COLORS[catType]?.text || 'text-slate-600' });
+                ipOtherDays += item.duration;
               }
+            } else if ([CategoryType.CHAMBER, CategoryType.FUNCTION].includes(catType)) {
+              envBaseSegments.push({ label: CATEGORY_COLORS[catType]?.label || '環境', days: item.duration, bg: CATEGORY_COLORS[catType]?.bg || 'bg-slate-100', text: CATEGORY_COLORS[catType]?.text || 'text-slate-600' });
+              envBaseDays += item.duration;
             } else {
-              appMechSum += item.duration;
-              const isBF = item.name.toLowerCase().includes('basic function');
-              if (isBF) mechBfDays += item.duration;
-              else mechSvDays += item.duration;
+              mechSegments.push({ label: CATEGORY_COLORS[catType]?.label || '震動', days: item.duration, bg: CATEGORY_COLORS[catType]?.bg || 'bg-slate-100', text: CATEGORY_COLORS[catType]?.text || 'text-slate-600' });
+              mechDays += item.duration;
             }
           }
         });
       });
 
-      let totalStorageDays = 0;
-      if (appStorageDays.length > 0) {
-        totalStorageDays = appStorageDays.reduce((a, b) => a + b, 0);
-      }
+      // --- 建立 DUT Rows ---
 
-      const totalEnvDays = storageStrategy === ExecutionStrategy.PARALLEL
-        ? appEnvSum
-        : appEnvSum + totalStorageDays;
-
-      const totalPkgDays = appPkgSum;
-      const totalMechDays = appMechSum;
-
-      // 本型號的 Track A (ENV) 總時間計算
-      let envDutDays = totalEnvDays;
-      if (anyPkgSelected && pkgStrategy === PkgSampleStrategy.REUSE) {
-        envDutDays = totalEnvDays + 14 + totalPkgDays;
-      }
-
-      const storageDutDays = totalStorageDays > 0 ? (envCatDays[CategoryType.FUNCTION] || 0) + totalStorageDays : 0;
-      let trackATotal = (storageStrategy === ExecutionStrategy.PARALLEL && totalStorageDays > 0 && model.envSampleCount >= 2)
-        ? Math.max(envDutDays, storageDutDays)
-        : envDutDays;
-
-      let trackCTotal = totalPkgDays;
-      if (anyPkgSelected && pkgStrategy === PkgSampleStrategy.REUSE) {
-        trackCTotal = 0;
-      }
-
-      const trackBTotal = totalMechDays;
-
-      // 如果全實驗室策略為並聯，則時間取各型號的最大值；如果為串聯，則相加。
-      // 計算每個型號自己的 Total Days (依據此型號所需的 A/B/C 三條線是否串並排而定)
-      const modelTotalUnits = model.envSampleCount + model.mechSampleCount + (pkgStrategy === PkgSampleStrategy.INDEPENDENT ? model.pkgSampleCount : 0);
-      const modelCurrentStrategy = (modelTotalUnits <= 1) ? ExecutionStrategy.SERIAL : strategy;
-
-      let modelFinalDays = 0;
-      if (modelCurrentStrategy === ExecutionStrategy.SERIAL) {
-        modelFinalDays = trackATotal + trackBTotal + trackCTotal;
-      } else {
-        modelFinalDays = Math.max(trackATotal, trackBTotal, trackCTotal);
-      }
-
-      globalTrackATotal = strategy === ExecutionStrategy.PARALLEL ? Math.max(globalTrackATotal, trackATotal) : globalTrackATotal + trackATotal;
-      globalTrackBTotal = strategy === ExecutionStrategy.PARALLEL ? Math.max(globalTrackBTotal, trackBTotal) : globalTrackBTotal + trackBTotal;
-      globalTrackCTotal = strategy === ExecutionStrategy.PARALLEL ? Math.max(globalTrackCTotal, trackCTotal) : globalTrackCTotal + trackCTotal;
-      globalTotalUnits += modelTotalUnits;
-
-      // 產生 DUT 分配資料
-      const envSegments: Seg[] = [];
-      if (storageStrategy === ExecutionStrategy.SERIAL) {
-        [CategoryType.FUNCTION, CategoryType.CHAMBER].forEach(cat => {
-          if (envCatDays[cat] > 0) envSegments.push({ label: CATEGORY_COLORS[cat].label, days: envCatDays[cat], bg: CATEGORY_COLORS[cat].bg, text: CATEGORY_COLORS[cat].text });
-        });
-        if (totalStorageDays > 0) envSegments.push({ label: CATEGORY_COLORS.storage.label, days: totalStorageDays, bg: CATEGORY_COLORS.storage.bg, text: CATEGORY_COLORS.storage.text });
-        [CategoryType.DUST_TEST, CategoryType.WATER_TEST, CategoryType.OTHER].forEach(cat => {
-          if (envCatDays[cat] > 0) envSegments.push({ label: CATEGORY_COLORS[cat].label, days: envCatDays[cat], bg: CATEGORY_COLORS[cat].bg, text: CATEGORY_COLORS[cat].text });
-        });
-      } else {
-        [CategoryType.FUNCTION, CategoryType.CHAMBER, CategoryType.DUST_TEST, CategoryType.WATER_TEST, CategoryType.OTHER].forEach(cat => {
-          if (envCatDays[cat] > 0) envSegments.push({ label: CATEGORY_COLORS[cat].label, days: envCatDays[cat], bg: CATEGORY_COLORS[cat].bg, text: CATEGORY_COLORS[cat].text });
-        });
-      }
-
-      const mechSegments: Seg[] = [];
-      if (mechBfDays > 0) mechSegments.push({ label: CATEGORY_COLORS[CategoryType.FUNCTION].label, days: mechBfDays, bg: CATEGORY_COLORS[CategoryType.FUNCTION].bg, text: CATEGORY_COLORS[CategoryType.FUNCTION].text });
-      if (mechSvDays > 0) mechSegments.push({ label: CATEGORY_COLORS[CategoryType.VIB_SHOCK].label, days: mechSvDays, bg: CATEGORY_COLORS[CategoryType.VIB_SHOCK].bg, text: CATEGORY_COLORS[CategoryType.VIB_SHOCK].text });
-
-      const pkgSegments: Seg[] = [];
-      if (totalPkgDays > 0) pkgSegments.push({ label: CATEGORY_COLORS.pkg.label, days: totalPkgDays, bg: CATEGORY_COLORS.pkg.bg, text: CATEGORY_COLORS.pkg.text });
-
-      // Build out rows
+      const modelDuts: Array<any> = [];
       let rowCounter = 1;
-      const baseStartDay = strategy === ExecutionStrategy.SERIAL ? (globalTrackATotal - trackATotal) : 0;
-      // Note: mapping serial behavior precisely requires more complex accumulator. We'll stick to model internal startDay logic as requested.
+      const baseStartDay = strategy === ExecutionStrategy.SERIAL ? globalTrackATotal : 0;
 
       const storageIsParallel = storageStrategy === ExecutionStrategy.PARALLEL && totalStorageDays > 0 && model.envSampleCount >= 2;
       const envDutCount = storageIsParallel ? (model.envSampleCount - 1) : model.envSampleCount;
 
-      const hasEnvContent = envSegments.length > 0 || (anyPkgSelected && pkgStrategy === PkgSampleStrategy.REUSE && pkgSegments.length > 0);
-      if (hasEnvContent) {
+      // 1. 產生 Track A (ENV Base + Storage if serial)
+      const envRows: any[] = [];
+      if (envDutCount > 0 && (envBaseSegments.length > 0 || (storageSegments.length > 0 && !storageIsParallel))) {
         for (let i = 0; i < envDutCount; i++) {
-          const segs = [...envSegments];
-          if (anyPkgSelected && pkgStrategy === PkgSampleStrategy.REUSE) {
-            segs.push({ label: CATEGORY_COLORS.prep.label, days: 14, bg: CATEGORY_COLORS.prep.bg, text: CATEGORY_COLORS.prep.text });
-            segs.push(...pkgSegments);
+          const segs = [...envBaseSegments];
+          let days = envBaseDays;
+
+          if (!storageIsParallel && storageSegments.length > 0) {
+            segs.push(...storageSegments);
+            days += totalStorageDays;
           }
-          allDutRows.push({
+
+          const row = {
             id: `dut_env_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
-            track: 'A', trackLabel: 'ENV', startDay: baseStartDay, segments: segs, totalDays: envDutDays,
-          });
+            track: 'A', trackLabel: 'ENV', startDay: baseStartDay, segments: segs, totalDays: days,
+          };
+          envRows.push(row);
+          modelDuts.push(row);
           rowCounter++;
         }
       }
 
+      // 2. 獨立的 Storage 樣品 (Track A)
       if (storageIsParallel) {
-        const storageSegs: Seg[] = [];
-        const bfDays = envCatDays[CategoryType.FUNCTION] || 0;
-        if (bfDays > 0) storageSegs.push({ label: CATEGORY_COLORS[CategoryType.FUNCTION].label, days: bfDays, bg: CATEGORY_COLORS[CategoryType.FUNCTION].bg, text: CATEGORY_COLORS[CategoryType.FUNCTION].text });
-        storageSegs.push({ label: CATEGORY_COLORS.storage.label, days: totalStorageDays, bg: CATEGORY_COLORS.storage.bg, text: CATEGORY_COLORS.storage.text });
-        allDutRows.push({
+        const segs = [];
+        const bfSeg = envBaseSegments.find(s => s.label === CATEGORY_COLORS[CategoryType.FUNCTION].label);
+        let sDays = totalStorageDays;
+        if (bfSeg) {
+          segs.push(bfSeg);
+          sDays += bfSeg.days;
+        }
+        segs.push(...storageSegments);
+
+        const row = {
           id: `dut_storage_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
-          track: 'A', trackLabel: 'Storage', startDay: baseStartDay, segments: storageSegs, totalDays: bfDays + totalStorageDays,
-        });
+          track: 'A', trackLabel: 'Storage', startDay: baseStartDay, segments: segs, totalDays: sDays,
+        };
+        modelDuts.push(row);
+        envRows.push(row); // Storage also acts as an ENV row target for load-balancing if needed
         rowCounter++;
       }
 
-      if (trackBTotal > 0 && model.mechSampleCount > 0) {
-        const mechStart = baseStartDay + (modelCurrentStrategy === ExecutionStrategy.SERIAL ? trackATotal : 0);
+      // 3. 產生 Track B (Mech)
+      const mechRows: any[] = [];
+      const mechStart = baseStartDay;
+      if (model.mechSampleCount > 0 && mechSegments.length > 0) {
         for (let i = 0; i < model.mechSampleCount; i++) {
-          allDutRows.push({
+          const row = {
             id: `dut_mech_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
-            track: 'B', trackLabel: 'S&V', startDay: mechStart, segments: [...mechSegments], totalDays: trackBTotal,
+            track: 'B', trackLabel: 'S&V', startDay: mechStart, segments: [...mechSegments], totalDays: mechDays,
+          };
+          mechRows.push(row);
+          modelDuts.push(row);
+          rowCounter++;
+        }
+      }
+
+      // 4. 智慧負載平衡 (Smart Routing)
+
+      // 高空 (Altitude) -> 找目前 ENV Rows 中最短的，接在後面
+      if (altitudeSegments.length > 0) {
+        if (envRows.length > 0) {
+          envRows.sort((a, b) => a.totalDays - b.totalDays);
+          const targetRow = envRows[0];
+          targetRow.segments.push(...altitudeSegments);
+          targetRow.totalDays += altitudeDays;
+        } else {
+          modelDuts.push({
+            id: `dut_alt_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+            track: 'A', trackLabel: 'ENV (Alt)', startDay: baseStartDay, segments: [...altitudeSegments], totalDays: altitudeDays,
           });
           rowCounter++;
         }
       }
 
-      if (pkgStrategy === PkgSampleStrategy.INDEPENDENT && trackCTotal > 0 && model.pkgSampleCount > 0) {
-        const pkgStart = baseStartDay + (modelCurrentStrategy === ExecutionStrategy.SERIAL ? (trackATotal + trackBTotal) : 0);
-        for (let i = 0; i < model.pkgSampleCount; i++) {
-          allDutRows.push({
-            id: `dut_pkg_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
-            track: 'C', trackLabel: 'PKG', startDay: pkgStart, segments: [...pkgSegments], totalDays: trackCTotal,
+      // IP / Other -> 找目前 ENV 或 MECH 中最短的，或獨立
+      if (ipOtherSegments.length > 0) {
+        if (singleSampleStrategy === SingleSampleStrategy.INDEPENDENT) {
+          modelDuts.push({
+            id: `dut_ip_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+            track: 'D', trackLabel: 'IP/Misc', startDay: baseStartDay, segments: [...ipOtherSegments], totalDays: ipOtherDays,
           });
           rowCounter++;
+        } else {
+          const candidates = [...envRows, ...mechRows];
+          if (candidates.length > 0) {
+            candidates.sort((a, b) => a.totalDays - b.totalDays);
+            const targetRow = candidates[0];
+            targetRow.segments.push(...ipOtherSegments);
+            targetRow.totalDays += ipOtherDays;
+          } else {
+            modelDuts.push({
+              id: `dut_ip_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+              track: 'A', trackLabel: 'IP/Misc', startDay: baseStartDay, segments: [...ipOtherSegments], totalDays: ipOtherDays,
+            });
+            rowCounter++;
+          }
         }
       }
+
+      // 5. 產生 Track C (PKG)
+      if (pkgSegments.length > 0) {
+        if (pkgStrategy === PkgSampleStrategy.REUSE) {
+          if (envRows.length > 0) {
+            envRows.sort((a, b) => b.totalDays - a.totalDays);
+            const targetRow = envRows[0];
+            targetRow.segments.push({ label: CATEGORY_COLORS.prep.label, days: 14, bg: CATEGORY_COLORS.prep.bg, text: CATEGORY_COLORS.prep.text });
+            targetRow.segments.push(...pkgSegments);
+            targetRow.totalDays += 14 + pkgDays;
+          } else {
+            modelDuts.push({
+              id: `dut_pkg_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+              track: 'C', trackLabel: 'PKG', startDay: baseStartDay, segments: [{ label: CATEGORY_COLORS.prep.label, days: 14, bg: CATEGORY_COLORS.prep.bg, text: CATEGORY_COLORS.prep.text }, ...pkgSegments], totalDays: 14 + pkgDays,
+            });
+            rowCounter++;
+          }
+        } else {
+          for (let i = 0; i < model.pkgSampleCount; i++) {
+            modelDuts.push({
+              id: `dut_pkg_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+              track: 'C', trackLabel: 'PKG', startDay: baseStartDay, segments: [...pkgSegments], totalDays: pkgDays,
+            });
+            rowCounter++;
+          }
+        }
+      }
+
+      // --- 結算 Model 的時間與數量 ---
+      let maxA = 0, maxB = 0, maxC = 0, maxD = 0;
+      modelDuts.forEach(d => {
+        if (d.track === 'A') maxA = Math.max(maxA, d.totalDays);
+        if (d.track === 'B') maxB = Math.max(maxB, d.totalDays);
+        if (d.track === 'C') maxC = Math.max(maxC, d.totalDays);
+        if (d.track === 'D') maxD = Math.max(maxD, d.totalDays);
+      });
+
+      // Update global tracking
+      if (strategy === ExecutionStrategy.SERIAL) {
+        const shiftAmount = globalTrackATotal;
+        modelDuts.forEach(d => d.startDay += shiftAmount);
+        globalTrackATotal += Math.max(maxA, maxB, maxC, maxD);
+      } else {
+        globalTrackATotal = Math.max(globalTrackATotal, maxA);
+        globalTrackBTotal = Math.max(globalTrackBTotal, maxB);
+        globalTrackCTotal = Math.max(globalTrackCTotal, maxC);
+        globalTrackATotal = Math.max(globalTrackATotal, maxD); // Independent IP tracked in A's timespan
+      }
+
+      const modelTotalUnits = model.envSampleCount + model.mechSampleCount + (pkgStrategy === PkgSampleStrategy.INDEPENDENT ? model.pkgSampleCount : 0) + (ipOtherSegments.length > 0 && singleSampleStrategy === SingleSampleStrategy.INDEPENDENT ? 1 : 0);
+      globalTotalUnits += modelTotalUnits;
+
+      allDutRows.push(...modelDuts);
     });
 
     if (strategy === ExecutionStrategy.SERIAL) {
-      finalTotalDays = globalTrackATotal + globalTrackBTotal + globalTrackCTotal;
+      finalTotalDays = globalTrackATotal;
     } else {
       finalTotalDays = Math.max(globalTrackATotal, globalTrackBTotal, globalTrackCTotal);
     }
-
 
     if (sortBy === 'track') {
       allDutRows.sort((a, b) => {
@@ -439,11 +494,6 @@ const App: React.FC = () => {
         return a.label.localeCompare(b.label);
       });
     } else {
-      // Sort by model name then track
-      // Extract model name from label if we didn't add modelId explicitely (we have it in map, but the rows are flattened)
-      // Actually simpler: just use insertion order for model (original array is pushed by model loop)
-      // but to be safe we sort by label if needed, or if we preserve insertion it's already sorted by model!
-      // To strictly ensure:
       allDutRows.sort((a, b) => {
         const modelA = a.id.split('_')[2];
         const modelB = b.id.split('_')[2];
@@ -462,7 +512,7 @@ const App: React.FC = () => {
       currentStrategy: strategy,
       dutRows: allDutRows,
     };
-  }, [standards, models, strategy, storageStrategy, pkgStrategy, sortBy]);
+  }, [standards, models, strategy, storageStrategy, pkgStrategy, singleSampleStrategy, sortBy]);
 
 
   return (
@@ -638,18 +688,17 @@ const App: React.FC = () => {
                     )}
                     {models.length > 1 && (
                       <button
-                        onClick={(e) => {
+                        onPointerDown={(e) => {
                           e.stopPropagation();
                           e.preventDefault();
-                          if (window.confirm(`確定要刪除型號 ${model.name} 嗎？`)) {
-                            const newModels = models.filter(m => m.id !== model.id);
-                            setModels(newModels);
-                            if (activeModelId === model.id) {
-                              setActiveModelId(newModels[0].id);
-                            }
+                          const newModels = models.filter(m => m.id !== model.id);
+                          setModels(newModels);
+                          if (activeModelId === model.id) {
+                            setActiveModelId(newModels[0].id);
                           }
                         }}
                         className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-rose-100 hover:text-rose-600 transition-colors"
+                        title="刪除型號"
                       >
                         ×
                       </button>
@@ -815,6 +864,29 @@ const App: React.FC = () => {
                       )}
                     </div>
 
+
+                    {/* Single Sample Strategy (Smart Routing) */}
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">高空/IP/鹽霧 執行策略</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setSingleSampleStrategy(SingleSampleStrategy.AUTO)}
+                          className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${singleSampleStrategy === SingleSampleStrategy.AUTO ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20 text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                        >
+                          智慧平衡分流
+                        </button>
+                        <button
+                          onClick={() => setSingleSampleStrategy(SingleSampleStrategy.INDEPENDENT)}
+                          className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${singleSampleStrategy === SingleSampleStrategy.INDEPENDENT ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20 text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                        >
+                          消耗獨立樣品
+                        </button>
+                      </div>
+                      <p className="text-[8px] text-slate-500 text-center font-medium italic mt-1">
+                        {singleSampleStrategy === SingleSampleStrategy.AUTO ? "💡 自動搜尋最短工期的樣品接續" : "💡 配置一台獨立新機專職執行"}
+                      </p>
+                    </div>
+
                     {/* PKG Strategy */}
                     <div className="space-y-3">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PKG 樣品策略</label>
@@ -862,156 +934,156 @@ const App: React.FC = () => {
         </div>
       </main>
 
-              {/* 手機版浮動底部控制面板 - 僅在 xl 以下顯示 */}
-              {mobileSettingsOpen && (
-                <div className="fixed inset-0 bg-black/40 xl:hidden z-40" onClick={() => setMobileSettingsOpen(false)} />
-              )}
-              <div className={`fixed bottom-0 left-0 right-0 xl:hidden bg-slate-900 border-t border-slate-700 z-50 transition-all duration-300 ${mobileSettingsOpen ? 'rounded-t-3xl' : ''}`}>
-                {/* 展開時的完整設定面板 */}
-                {mobileSettingsOpen && (
-                  <div className="p-5 pt-2 space-y-4 max-h-[70vh] overflow-y-auto">
-                    {/* 拖曳指示條 */}
-                    <div className="flex justify-center py-2">
-                      <div className="w-10 h-1 bg-slate-600 rounded-full"></div>
-                    </div>
+      {/* 手機版浮動底部控制面板 - 僅在 xl 以下顯示 */}
+      {mobileSettingsOpen && (
+        <div className="fixed inset-0 bg-black/40 xl:hidden z-40" onClick={() => setMobileSettingsOpen(false)} />
+      )}
+      <div className={`fixed bottom-0 left-0 right-0 xl:hidden bg-slate-900 border-t border-slate-700 z-50 transition-all duration-300 ${mobileSettingsOpen ? 'rounded-t-3xl' : ''}`}>
+        {/* 展開時的完整設定面板 */}
+        {mobileSettingsOpen && (
+          <div className="p-5 pt-2 space-y-4 max-h-[70vh] overflow-y-auto">
+            {/* 拖曳指示條 */}
+            <div className="flex justify-center py-2">
+              <div className="w-10 h-1 bg-slate-600 rounded-full"></div>
+            </div>
 
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] text-center">Strategy Settings</h3>
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] text-center">Strategy Settings</h3>
 
-                    {/* 型號名稱 */}
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">型號名稱</label>
-                      <input
-                        type="text"
-                        value={activeModel.name}
-                        onChange={(e) => updateActiveModel({ name: e.target.value })}
-                        placeholder="例：NAT-G102-T"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      />
-                    </div>
+            {/* 型號名稱 */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">型號名稱</label>
+              <input
+                type="text"
+                value={activeModel.name}
+                onChange={(e) => updateActiveModel({ name: e.target.value })}
+                placeholder="例：NAT-G102-T"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
 
-                    {/* 樣品數量 - Track A / B 分開 */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">樣品數量需求</label>
-                      <div className="flex gap-2">
-                        <div className="flex-1 flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                          <span className="text-[10px] font-bold text-slate-400">Track A</span>
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => updateActiveModel({ envSampleCount: Math.max(1, activeModel.envSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
-                            <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.envSampleCount}</span>
-                            <button onClick={() => updateActiveModel({ envSampleCount: activeModel.envSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <div className="flex-1 flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                          <span className="text-[10px] font-bold text-slate-400">Track B</span>
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => updateActiveModel({ mechSampleCount: Math.max(0, activeModel.mechSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
-                            <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.mechSampleCount}</span>
-                            <button onClick={() => updateActiveModel({ mechSampleCount: activeModel.mechSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
-                          </div>
-                        </div>
-                      </div>
-                      {pkgStrategy === PkgSampleStrategy.INDEPENDENT && (
-                        <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                          <span className="text-[10px] font-bold text-slate-400">Track C</span>
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => updateActiveModel({ pkgSampleCount: Math.max(1, activeModel.pkgSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
-                            <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.pkgSampleCount}</span>
-                            <button onClick={() => updateActiveModel({ pkgSampleCount: activeModel.pkgSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Storage 策略 */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Storage 類別執行</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => setStorageStrategy(ExecutionStrategy.SERIAL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${storageStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>串聯模式</button>
-                        <button onClick={() => activeModel.envSampleCount >= 2 && setStorageStrategy(ExecutionStrategy.PARALLEL)} disabled={activeModel.envSampleCount < 2} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${storageStrategy === ExecutionStrategy.PARALLEL && activeModel.envSampleCount >= 2 ? 'bg-indigo-600 text-white' : activeModel.envSampleCount < 2 ? 'bg-white/10 text-slate-600 cursor-not-allowed opacity-50' : 'bg-white/10 text-slate-400'}`}>並行模式</button>
-                      </div>
-                    </div>
-
-                    {/* PKG 策略 */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PKG 樣品策略</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => setPkgStrategy(PkgSampleStrategy.REUSE)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${pkgStrategy === PkgSampleStrategy.REUSE ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>延用樣品</button>
-                        <button onClick={() => setPkgStrategy(PkgSampleStrategy.INDEPENDENT)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${pkgStrategy === PkgSampleStrategy.INDEPENDENT ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>獨立樣品</button>
-                      </div>
-                      <p className="text-[9px] text-slate-500 text-center italic">{pkgStrategy === PkgSampleStrategy.REUSE ? '💡 延用樣品需增加 14 天前置整理時間' : '💡 獨立樣品不需整理時間，但需額外樣品'}</p>
-                    </div>
-
-                    {/* 主關鍵路徑策略 */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">主關鍵路徑策略</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => setStrategy(ExecutionStrategy.SERIAL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${calculationResults.currentStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>總程串聯</button>
-                        <button disabled={calculationResults.totalUnits <= 1} onClick={() => setStrategy(ExecutionStrategy.PARALLEL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'} disabled:opacity-20`}>總程並聯</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 底部常駐摘要列 - 點擊展開/收合 */}
-                <div className="p-4" onClick={() => setMobileSettingsOpen(!mobileSettingsOpen)}>
-                  <div className="flex items-center justify-between gap-3 max-w-lg mx-auto">
-                    <div className="flex items-center gap-3 text-white">
-                      <span className="text-[10px] font-bold text-slate-400">A:</span>
-                      <span className="font-bold tabular-nums text-sm">{activeModel.envSampleCount}</span>
-                      <span className="text-slate-600">|</span>
-                      <span className="text-[10px] font-bold text-slate-400">B:</span>
-                      <span className="font-bold tabular-nums text-sm">{activeModel.mechSampleCount}</span>
-                      {pkgStrategy === PkgSampleStrategy.INDEPENDENT && (<>
-                        <span className="text-slate-600">|</span>
-                        <span className="text-[10px] font-bold text-slate-400">C:</span>
-                        <span className="font-bold tabular-nums text-sm">{activeModel.pkgSampleCount}</span>
-                      </>)}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[9px] font-bold px-2 py-1 rounded-lg ${pkgStrategy === PkgSampleStrategy.REUSE ? 'bg-indigo-600/30 text-indigo-300' : 'bg-amber-600/30 text-amber-300'}`}>{pkgStrategy === PkgSampleStrategy.REUSE ? '延用' : '獨立'}</span>
-                      <span className={`text-[9px] font-bold px-2 py-1 rounded-lg ${calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? 'bg-emerald-600/30 text-emerald-300' : 'bg-slate-600/30 text-slate-300'}`}>{calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? '並聯' : '串聯'}</span>
-                      <svg className={`w-4 h-4 text-slate-400 transition-transform ${mobileSettingsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M5 15l7-7 7 7" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></svg>
-                    </div>
+            {/* 樣品數量 - Track A / B 分開 */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">樣品數量需求</label>
+              <div className="flex gap-2">
+                <div className="flex-1 flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
+                  <span className="text-[10px] font-bold text-slate-400">Track A</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => updateActiveModel({ envSampleCount: Math.max(1, activeModel.envSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
+                    <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.envSampleCount}</span>
+                    <button onClick={() => updateActiveModel({ envSampleCount: activeModel.envSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
                   </div>
                 </div>
               </div>
-
-              {/* Test Item Modal */}
-              {
-                editingTest && (
-                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
-                    <form onSubmit={saveTestItem} className="bg-white rounded-[2.5rem] p-10 max-w-lg w-full shadow-2xl border border-slate-100 space-y-8 animate-in fade-in zoom-in duration-200">
-                      <h3 className="text-2xl font-bold text-slate-900">測試項目編輯</h3>
-                      <div className="space-y-6">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">項目名稱 (名稱含 "PKG" 可啟動特殊邏輯)</label>
-                          <input required type="text" value={editingTest.data.name || ''} onChange={e => setEditingTest({ ...editingTest, data: { ...editingTest.data, name: e.target.value } })} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all" />
-                        </div>
-                        <div className="flex gap-4">
-                          <div className="flex-1 space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">工期 (WD)</label>
-                            <input required type="number" step="0.5" value={editingTest.data.duration || ''} onChange={e => setEditingTest({ ...editingTest, data: { ...editingTest.data, duration: parseFloat(e.target.value) } })} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all" />
-                          </div>
-                          <div className="flex-[2] space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">所屬類別</label>
-                            <select value={editingTest.data.category} onChange={e => setEditingTest({ ...editingTest, data: { ...editingTest.data, category: e.target.value as CategoryType } })} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all appearance-none cursor-pointer">
-                              {Object.values(CategoryType).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={() => setEditingTest(null)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-200">取消</button>
-                        <button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-lg hover:bg-slate-800 transition-all">儲存測項</button>
-                      </div>
-                    </form>
+              <div className="flex gap-2">
+                <div className="flex-1 flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
+                  <span className="text-[10px] font-bold text-slate-400">Track B</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => updateActiveModel({ mechSampleCount: Math.max(0, activeModel.mechSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
+                    <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.mechSampleCount}</span>
+                    <button onClick={() => updateActiveModel({ mechSampleCount: activeModel.mechSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
                   </div>
-                )
-              }
+                </div>
+              </div>
+              {pkgStrategy === PkgSampleStrategy.INDEPENDENT && (
+                <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
+                  <span className="text-[10px] font-bold text-slate-400">Track C</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => updateActiveModel({ pkgSampleCount: Math.max(1, activeModel.pkgSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
+                    <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.pkgSampleCount}</span>
+                    <button onClick={() => updateActiveModel({ pkgSampleCount: activeModel.pkgSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
+                  </div>
+                </div>
+              )}
+            </div>
 
-              
+            {/* Storage 策略 */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Storage 類別執行</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setStorageStrategy(ExecutionStrategy.SERIAL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${storageStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>串聯模式</button>
+                <button onClick={() => activeModel.envSampleCount >= 2 && setStorageStrategy(ExecutionStrategy.PARALLEL)} disabled={activeModel.envSampleCount < 2} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${storageStrategy === ExecutionStrategy.PARALLEL && activeModel.envSampleCount >= 2 ? 'bg-indigo-600 text-white' : activeModel.envSampleCount < 2 ? 'bg-white/10 text-slate-600 cursor-not-allowed opacity-50' : 'bg-white/10 text-slate-400'}`}>並行模式</button>
+              </div>
+            </div>
+
+            {/* PKG 策略 */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PKG 樣品策略</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setPkgStrategy(PkgSampleStrategy.REUSE)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${pkgStrategy === PkgSampleStrategy.REUSE ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>延用樣品</button>
+                <button onClick={() => setPkgStrategy(PkgSampleStrategy.INDEPENDENT)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${pkgStrategy === PkgSampleStrategy.INDEPENDENT ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>獨立樣品</button>
+              </div>
+              <p className="text-[9px] text-slate-500 text-center italic">{pkgStrategy === PkgSampleStrategy.REUSE ? '💡 延用樣品需增加 14 天前置整理時間' : '💡 獨立樣品不需整理時間，但需額外樣品'}</p>
+            </div>
+
+            {/* 主關鍵路徑策略 */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">主關鍵路徑策略</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setStrategy(ExecutionStrategy.SERIAL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${calculationResults.currentStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>總程串聯</button>
+                <button disabled={calculationResults.totalUnits <= 1} onClick={() => setStrategy(ExecutionStrategy.PARALLEL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'} disabled:opacity-20`}>總程並聯</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 底部常駐摘要列 - 點擊展開/收合 */}
+        <div className="p-4" onClick={() => setMobileSettingsOpen(!mobileSettingsOpen)}>
+          <div className="flex items-center justify-between gap-3 max-w-lg mx-auto">
+            <div className="flex items-center gap-3 text-white">
+              <span className="text-[10px] font-bold text-slate-400">A:</span>
+              <span className="font-bold tabular-nums text-sm">{activeModel.envSampleCount}</span>
+              <span className="text-slate-600">|</span>
+              <span className="text-[10px] font-bold text-slate-400">B:</span>
+              <span className="font-bold tabular-nums text-sm">{activeModel.mechSampleCount}</span>
+              {pkgStrategy === PkgSampleStrategy.INDEPENDENT && (<>
+                <span className="text-slate-600">|</span>
+                <span className="text-[10px] font-bold text-slate-400">C:</span>
+                <span className="font-bold tabular-nums text-sm">{activeModel.pkgSampleCount}</span>
+              </>)}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-[9px] font-bold px-2 py-1 rounded-lg ${pkgStrategy === PkgSampleStrategy.REUSE ? 'bg-indigo-600/30 text-indigo-300' : 'bg-amber-600/30 text-amber-300'}`}>{pkgStrategy === PkgSampleStrategy.REUSE ? '延用' : '獨立'}</span>
+              <span className={`text-[9px] font-bold px-2 py-1 rounded-lg ${calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? 'bg-emerald-600/30 text-emerald-300' : 'bg-slate-600/30 text-slate-300'}`}>{calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? '並聯' : '串聯'}</span>
+              <svg className={`w-4 h-4 text-slate-400 transition-transform ${mobileSettingsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M5 15l7-7 7 7" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Test Item Modal */}
+      {
+        editingTest && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+            <form onSubmit={saveTestItem} className="bg-white rounded-[2.5rem] p-10 max-w-lg w-full shadow-2xl border border-slate-100 space-y-8 animate-in fade-in zoom-in duration-200">
+              <h3 className="text-2xl font-bold text-slate-900">測試項目編輯</h3>
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">項目名稱 (名稱含 "PKG" 可啟動特殊邏輯)</label>
+                  <input required type="text" value={editingTest.data.name || ''} onChange={e => setEditingTest({ ...editingTest, data: { ...editingTest.data, name: e.target.value } })} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all" />
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex-1 space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">工期 (WD)</label>
+                    <input required type="number" step="0.5" value={editingTest.data.duration || ''} onChange={e => setEditingTest({ ...editingTest, data: { ...editingTest.data, duration: parseFloat(e.target.value) } })} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all" />
+                  </div>
+                  <div className="flex-[2] space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">所屬類別</label>
+                    <select value={editingTest.data.category} onChange={e => setEditingTest({ ...editingTest, data: { ...editingTest.data, category: e.target.value as CategoryType } })} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all appearance-none cursor-pointer">
+                      {Object.values(CategoryType).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setEditingTest(null)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-200">取消</button>
+                <button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-lg hover:bg-slate-800 transition-all">儲存測項</button>
+              </div>
+            </form>
+          </div>
+        )
+      }
+
+
       {/* Application Domain Modal */}
       {
         editingStandard && (
