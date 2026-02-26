@@ -130,6 +130,7 @@ const App: React.FC = () => {
   });
 
   const [activeModelId, setActiveModelId] = useState<string>(models[0]?.id || '');
+  const [sortBy, setSortBy] = useState<'model' | 'track'>('model');
 
   // Keep strategy global
   const [strategy, setStrategy] = useState<ExecutionStrategy>(ExecutionStrategy.PARALLEL);
@@ -298,9 +299,7 @@ const App: React.FC = () => {
 
       let totalStorageDays = 0;
       if (appStorageDays.length > 0) {
-        totalStorageDays = storageStrategy === ExecutionStrategy.PARALLEL
-          ? Math.max(...appStorageDays)
-          : appStorageDays.reduce((a, b) => a + b, 0);
+        totalStorageDays = appStorageDays.reduce((a, b) => a + b, 0);
       }
 
       const totalEnvDays = storageStrategy === ExecutionStrategy.PARALLEL
@@ -433,6 +432,26 @@ const App: React.FC = () => {
       finalTotalDays = Math.max(globalTrackATotal, globalTrackBTotal, globalTrackCTotal);
     }
 
+
+    if (sortBy === 'track') {
+      allDutRows.sort((a, b) => {
+        if (a.track !== b.track) return a.track.localeCompare(b.track);
+        return a.label.localeCompare(b.label);
+      });
+    } else {
+      // Sort by model name then track
+      // Extract model name from label if we didn't add modelId explicitely (we have it in map, but the rows are flattened)
+      // Actually simpler: just use insertion order for model (original array is pushed by model loop)
+      // but to be safe we sort by label if needed, or if we preserve insertion it's already sorted by model!
+      // To strictly ensure:
+      allDutRows.sort((a, b) => {
+        const modelA = a.id.split('_')[2];
+        const modelB = b.id.split('_')[2];
+        if (modelA !== modelB) return modelA.localeCompare(modelB);
+        return String(a.track).localeCompare(String(b.track));
+      });
+    }
+
     return {
       totalDays: finalTotalDays,
       trackATotal: globalTrackATotal,
@@ -443,14 +462,14 @@ const App: React.FC = () => {
       currentStrategy: strategy,
       dutRows: allDutRows,
     };
-  }, [standards, models, strategy, storageStrategy, pkgStrategy]);
+  }, [standards, models, strategy, storageStrategy, pkgStrategy, sortBy]);
 
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row text-slate-800 font-sans">
 
       {/* Sidebar - Compact Selection */}
-      <aside className="w-full md:w-72 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-y-auto no-print">
+      <aside className="w-full md:w-72 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-y-auto no-print md:sticky md:top-0 md:h-screen">
         <div className="p-6 border-b border-slate-100 bg-slate-50/50">
           <h1 className="text-xl font-bold tracking-tight text-slate-900">DQA Planner</h1>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Industrial Standards</p>
@@ -487,19 +506,34 @@ const App: React.FC = () => {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col md:h-screen md:overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0">
 
         {/* Gantt / Summary Header */}
-        <section className="bg-white border-b border-slate-200 p-6 lg:px-10 shrink-0 shadow-sm z-10">
+        <section className="bg-white border-b border-slate-200 p-6 lg:px-10 shrink-0 shadow-sm sticky top-0 z-30">
           {!calculationResults.hasTests ? (
             <div className="w-full text-center py-6 text-slate-300 font-medium italic">請選取測項開始評估</div>
           ) : (
-            <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-10">
+            <div className="w-full flex flex-col xl:flex-row items-stretch gap-6 xl:gap-10">
               <div className="flex-1 w-full space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="h-2 w-2 rounded-full bg-indigo-500 shadow-sm animate-pulse"></div>
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">DUT Assignment Gantt</h3>
+                    <div className="flex ml-4 bg-slate-100 rounded-lg p-0.5">
+                      <button
+                        onClick={() => setSortBy('model')}
+                        className={`px-3 py-1 text-[9px] font-bold uppercase rounded-md transition-all ${sortBy === 'model' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        依據型號排列
+                      </button>
+                      <button
+                        onClick={() => setSortBy('track')}
+                        className={`px-3 py-1 text-[9px] font-bold uppercase rounded-md transition-all ${sortBy === 'track' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        依據測試排列
+                      </button>
+                    </div>
+
                   </div>
                   <div className="flex gap-4 text-[9px] font-bold text-slate-400 uppercase">
                     <span>A: <span className="text-indigo-600 tabular-nums">{calculationResults.trackATotal}D</span></span>
@@ -509,7 +543,7 @@ const App: React.FC = () => {
                 </div>
 
                 {/* DUT 列 */}
-                <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                <div className="space-y-1.5 max-h-[40vh] xl:max-h-[50vh] overflow-y-auto pr-1 flex-1">
                   {calculationResults.dutRows.map(dut => (
                     <div key={dut.id} className="flex items-center gap-2">
                       <div className="w-auto min-w-[6rem] shrink-0 flex items-center gap-1.5">
@@ -558,18 +592,18 @@ const App: React.FC = () => {
               </div>
 
               {/* Numerical Overview */}
-              <div className="flex gap-10 shrink-0 border-l border-slate-100 pl-10 h-full items-center">
+              <div className="flex xl:flex-col gap-6 xl:gap-8 shrink-0 xl:border-l xl:border-slate-100 xl:pl-10 h-full justify-center">
                 <div className="text-right">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">評估總工期</p>
                   <div className="flex items-baseline justify-end text-indigo-600">
-                    <span className="text-5xl font-light tabular-nums leading-none tracking-tighter">{calculationResults.totalDays}</span>
+                    <span className="text-5xl xl:text-6xl font-light tabular-nums leading-none tracking-tighter">{calculationResults.totalDays}</span>
                     <span className="text-xs font-bold ml-1 uppercase">WD</span>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">樣品數量</p>
                   <div className="flex items-baseline justify-end text-slate-900">
-                    <span className="text-5xl font-light tabular-nums leading-none tracking-tighter">{calculationResults.totalUnits}</span>
+                    <span className="text-5xl xl:text-6xl font-light tabular-nums leading-none tracking-tighter">{calculationResults.totalUnits}</span>
                     <span className="text-xs font-bold ml-1 uppercase">Sets</span>
                   </div>
                 </div>
@@ -579,23 +613,34 @@ const App: React.FC = () => {
         </section>
 
         {/* Workspace: Test Group Details */}
-        <div className="flex-1 md:overflow-y-auto p-6 lg:p-10 pb-28 xl:pb-10">
-          <div className="max-w-6xl mx-auto flex flex-col xl:flex-row gap-10">
+        <div className="flex-1 p-6 lg:p-10 pb-28 xl:pb-10">
+          <div className="w-full flex flex-col gap-6">
 
-            <div className="flex-1 space-y-6">
+            <div className="w-full">
               {/* Model Tabs */}
               <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-200">
                 {models.map(model => (
-                  <button
+                  <div
                     key={model.id}
                     onClick={() => setActiveModelId(model.id)}
-                    className={`px-4 py-2.5 rounded-t-xl font-bold text-sm whitespace-nowrap transition-all border border-b-0 flex items-center gap-2 ${activeModelId === model.id ? 'bg-white text-indigo-600 border-slate-200 shadow-sm relative z-10 -mb-[9px]' : 'bg-slate-50 border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                    className={`px-4 py-2.5 rounded-t-xl font-bold text-sm whitespace-nowrap transition-all border border-b-0 flex items-center gap-2 cursor-pointer ${activeModelId === model.id ? 'bg-white text-indigo-600 border-slate-200 shadow-sm relative z-10 -mb-[9px]' : 'bg-slate-50 border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
                   >
-                    <span>{model.name}</span>
+                    {activeModelId === model.id ? (
+                      <input
+                        type="text"
+                        value={model.name}
+                        onChange={(e) => updateActiveModel({ name: e.target.value })}
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-transparent border-none outline-none focus:ring-1 focus:ring-indigo-300 rounded px-1 -mx-1 font-bold text-sm text-indigo-700 w-32"
+                      />
+                    ) : (
+                      <span>{model.name}</span>
+                    )}
                     {models.length > 1 && (
-                      <span
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          e.preventDefault();
                           if (window.confirm(`確定要刪除型號 ${model.name} 嗎？`)) {
                             const newModels = models.filter(m => m.id !== model.id);
                             setModels(newModels);
@@ -607,9 +652,9 @@ const App: React.FC = () => {
                         className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-rose-100 hover:text-rose-600 transition-colors"
                       >
                         ×
-                      </span>
+                      </button>
                     )}
-                  </button>
+                  </div>
                 ))}
                 <button
                   onClick={() => {
@@ -625,345 +670,348 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            <div className="space-y-10">
+            <div className="flex flex-col xl:flex-row gap-10 items-start w-full">
+              <div className="flex-1 space-y-10 w-full">
 
-              {standards.filter(s => activeApps.includes(s.id)).map(standard => (
-                <div key={standard.id} className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm">
-                  <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 pb-5 border-b border-slate-100 gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 ${APP_COLORS[standard.id] || APP_COLORS.default} text-white rounded-2xl flex items-center justify-center shadow-lg`}>
-                        {getAppIcon(standard.icon, "w-6 h-6")}
+                {standards.filter(s => activeApps.includes(s.id)).map(standard => (
+                  <div key={standard.id} className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm">
+                    <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 pb-5 border-b border-slate-100 gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 ${APP_COLORS[standard.id] || APP_COLORS.default} text-white rounded-2xl flex items-center justify-center shadow-lg`}>
+                          {getAppIcon(standard.icon, "w-6 h-6")}
+                        </div>
+                        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{standard.name}</h2>
                       </div>
-                      <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{standard.name}</h2>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => setEditingTest({ standardId: standard.id, isNew: true, data: { category: CategoryType.CHAMBER, duration: 1 } })} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800 transition-colors shadow-sm">+ 新增項目</button>
-                      <button onClick={() => toggleAllInStandard(standard, true)} className="px-3 py-2 bg-slate-50 text-slate-500 rounded-xl text-[10px] font-bold uppercase hover:bg-slate-100 border border-slate-200">全選</button>
-                      <button onClick={() => {
-                        const defaults = getDefaultSelectedTests([standard]);
-                        updateActiveModel({ selectedTests: defaults[standard.id] || {} });
-                      }} className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-bold uppercase hover:bg-indigo-100 border border-indigo-200">預設</button>
-                      <button onClick={() => toggleAllInStandard(standard, false)} className="px-3 py-2 bg-slate-50 text-rose-500 rounded-xl text-[10px] font-bold uppercase hover:bg-rose-50 border border-rose-100">清除</button>
-                    </div>
-                  </header>
+                      <div className="flex gap-2">
+                        <button onClick={() => setEditingTest({ standardId: standard.id, isNew: true, data: { category: CategoryType.CHAMBER, duration: 1 } })} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800 transition-colors shadow-sm">+ 新增項目</button>
+                        <button onClick={() => toggleAllInStandard(standard, true)} className="px-3 py-2 bg-slate-50 text-slate-500 rounded-xl text-[10px] font-bold uppercase hover:bg-slate-100 border border-slate-200">全選</button>
+                        <button onClick={() => {
+                          const defaults = getDefaultSelectedTests([standard]);
+                          updateActiveModel({ selectedTests: defaults[standard.id] || {} });
+                        }} className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-bold uppercase hover:bg-indigo-100 border border-indigo-200">預設</button>
+                        <button onClick={() => toggleAllInStandard(standard, false)} className="px-3 py-2 bg-slate-50 text-rose-500 rounded-xl text-[10px] font-bold uppercase hover:bg-rose-50 border border-rose-100">清除</button>
+                      </div>
+                    </header>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                    {Object.values(CategoryType).map(cat => {
-                      const items = standard.categories[cat] || [];
-                      if (items.length === 0) return null;
-                      return (
-                        <div key={cat} className="space-y-4">
-                          <h4 className="text-lg font-bold text-slate-900 border-l-4 border-slate-300 pl-4 py-0.5 mb-2">{cat}</h4>
-                          <div className="space-y-3">
-                            {items.map(item => {
-                              const isSelected = activeModel.selectedTests?.[item.id];
-                              const isPkg = item.name.toLowerCase().includes('pkg');
-                              return (
-                                <div key={item.id} className="relative group/card">
-                                  <div
-                                    onClick={() => toggleTest(standard.id, item.id)}
-                                    className={`w-full flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'bg-indigo-50/40 border-indigo-600 shadow-sm' : 'bg-white border-slate-100 hover:border-slate-200'}`}
-                                  >
-                                    <div className="flex-1 pr-14">
-                                      <div className="flex items-center gap-2">
-                                        <p className={`text-sm font-semibold transition-colors ${isSelected ? 'text-slate-900' : 'text-slate-400'}`}>{item.name}</p>
-                                        {isPkg && <span className="text-[8px] bg-slate-800 text-white px-1.5 py-0.5 rounded font-black uppercase">PKG</span>}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                      {Object.values(CategoryType).map(cat => {
+                        const items = standard.categories[cat] || [];
+                        if (items.length === 0) return null;
+                        return (
+                          <div key={cat} className="space-y-4">
+                            <h4 className="text-lg font-bold text-slate-900 border-l-4 border-slate-300 pl-4 py-0.5 mb-2">{cat}</h4>
+                            <div className="space-y-3">
+                              {items.map(item => {
+                                const isSelected = activeModel.selectedTests?.[item.id];
+                                const isPkg = item.name.toLowerCase().includes('pkg');
+                                return (
+                                  <div key={item.id} className="relative group/card">
+                                    <div
+                                      onClick={() => toggleTest(standard.id, item.id)}
+                                      className={`w-full flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'bg-indigo-50/40 border-indigo-600 shadow-sm' : 'bg-white border-slate-100 hover:border-slate-200'}`}
+                                    >
+                                      <div className="flex-1 pr-14">
+                                        <div className="flex items-center gap-2">
+                                          <p className={`text-sm font-semibold transition-colors ${isSelected ? 'text-slate-900' : 'text-slate-400'}`}>{item.name}</p>
+                                          {isPkg && <span className="text-[8px] bg-slate-800 text-white px-1.5 py-0.5 rounded font-black uppercase">PKG</span>}
+                                        </div>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{item.duration} WD</p>
                                       </div>
-                                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{item.duration} WD</p>
+                                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm' : 'border-slate-200'}`}>
+                                        {isSelected && <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg>}
+                                      </div>
                                     </div>
-                                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm' : 'border-slate-200'}`}>
-                                      {isSelected && <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg>}
-                                    </div>
-                                  </div>
 
-                                  <div className="absolute top-1/2 -translate-y-1/2 right-12 flex gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity z-10 scale-90">
-                                    <button onClick={(e) => { e.stopPropagation(); setEditingTest({ standardId: standard.id, isNew: false, data: item }); }} className="p-2.5 bg-white rounded-xl shadow-lg border border-slate-100 text-slate-400 hover:text-indigo-600 hover:scale-110 transition-all"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2.5} /></svg></button>
-                                    <button onClick={(e) => deleteTestItem(e, standard.id, cat, item.id)} className="p-2.5 bg-white rounded-xl shadow-lg border border-slate-100 text-slate-400 hover:text-rose-600 hover:scale-110 transition-all"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth={2.5} /></svg></button>
+                                    <div className="absolute top-1/2 -translate-y-1/2 right-12 flex gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity z-10 scale-90">
+                                      <button onClick={(e) => { e.stopPropagation(); setEditingTest({ standardId: standard.id, isNew: false, data: item }); }} className="p-2.5 bg-white rounded-xl shadow-lg border border-slate-100 text-slate-400 hover:text-indigo-600 hover:scale-110 transition-all"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2.5} /></svg></button>
+                                      <button onClick={(e) => deleteTestItem(e, standard.id, cat, item.id)} className="p-2.5 bg-white rounded-xl shadow-lg border border-slate-100 text-slate-400 hover:text-rose-600 hover:scale-110 transition-all"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth={2.5} /></svg></button>
+                                    </div>
                                   </div>
-                                </div>
-                              );
-                            })}
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Controls Side Panel */}
+              <aside className="w-full xl:w-80 shrink-0 space-y-6">
+                <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl space-y-8 sticky top-6 border border-slate-800 max-h-[calc(100vh-3rem)] overflow-y-auto">
+                  <div className="text-center">
+                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2">Strategy Settings</h3>
+                    <div className="h-0.5 w-12 bg-indigo-500 mx-auto rounded-full"></div>
+                  </div>
+
+                  <div className="space-y-6">
+                    {/* 型號名稱 */}
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">型號名稱</label>
+                      <input
+                        type="text"
+                        value={activeModel.name}
+                        onChange={(e) => updateActiveModel({ name: e.target.value })}
+                        placeholder="例：NAT-G102-T"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                    {/* Sample Requirements */}
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">樣品數量需求分配</label>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
+                          <span className="text-[10px] font-bold text-slate-400">Track A 樣品數量</span>
+                          <div className="flex items-center gap-3">
+                            <button onClick={() => updateActiveModel({ envSampleCount: Math.max(1, activeModel.envSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
+                            <span className="w-4 text-center font-bold tabular-nums">{activeModel.envSampleCount}</span>
+                            <button onClick={() => updateActiveModel({ envSampleCount: activeModel.envSampleCount + 1 })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
                           </div>
                         </div>
-                      );
-                    })}
+
+                        <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
+                          <span className="text-[10px] font-bold text-slate-400">Track B 樣品數量</span>
+                          <div className="flex items-center gap-3">
+                            <button onClick={() => updateActiveModel({ mechSampleCount: Math.max(0, activeModel.mechSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
+                            <span className="w-4 text-center font-bold tabular-nums">{activeModel.mechSampleCount}</span>
+                            <button onClick={() => updateActiveModel({ mechSampleCount: activeModel.mechSampleCount + 1 })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
+                          </div>
+                        </div>
+                        {pkgStrategy === PkgSampleStrategy.INDEPENDENT && (
+                          <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
+                            <span className="text-[10px] font-bold text-slate-400">Track C 樣品數量</span>
+                            <div className="flex items-center gap-3">
+                              <button onClick={() => updateActiveModel({ pkgSampleCount: Math.max(1, activeModel.pkgSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
+                              <span className="w-4 text-center font-bold tabular-nums">{activeModel.pkgSampleCount}</span>
+                              <button onClick={() => updateActiveModel({ pkgSampleCount: activeModel.pkgSampleCount + 1 })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Storage Strategy - ADDED BACK */}
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Storage 類別執行</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setStorageStrategy(ExecutionStrategy.SERIAL)}
+                          className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${storageStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                        >
+                          串聯模式
+                        </button>
+                        <button
+                          onClick={() => activeModel.envSampleCount >= 2 && setStorageStrategy(ExecutionStrategy.PARALLEL)}
+                          disabled={activeModel.envSampleCount < 2}
+                          className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${storageStrategy === ExecutionStrategy.PARALLEL && activeModel.envSampleCount >= 2 ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : activeModel.envSampleCount < 2 ? 'bg-white/5 text-slate-600 cursor-not-allowed opacity-50' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                        >
+                          並行模式
+                        </button>
+                      </div>
+                      {activeModel.envSampleCount < 2 && storageStrategy === ExecutionStrategy.PARALLEL && (
+                        <p className="text-[9px] text-amber-400 mt-1">⚠ Track A 樣品需 ≥ 2 才可啟用並聯</p>
+                      )}
+                    </div>
+
+                    {/* PKG Strategy */}
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PKG 樣品策略</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setPkgStrategy(PkgSampleStrategy.REUSE)}
+                          className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${pkgStrategy === PkgSampleStrategy.REUSE ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                        >
+                          延用樣品
+                        </button>
+                        <button
+                          onClick={() => setPkgStrategy(PkgSampleStrategy.INDEPENDENT)}
+                          className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${pkgStrategy === PkgSampleStrategy.INDEPENDENT ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                        >
+                          獨立樣品
+                        </button>
+                      </div>
+                      <p className="text-[8px] text-slate-500 text-center font-medium italic mt-1">
+                        {pkgStrategy === PkgSampleStrategy.REUSE ? "💡 延用樣品需增加 14 天前置整理時間" : "💡 獨立樣品不需整理時間，但需額外樣品"}
+                      </p>
+                    </div>
+
+                    {/* Master Strategy */}
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">主關鍵路徑策略</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => setStrategy(ExecutionStrategy.SERIAL)} className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${calculationResults.currentStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}>總程串聯</button>
+                        <button disabled={calculationResults.totalUnits <= 1} onClick={() => setStrategy(ExecutionStrategy.PARALLEL)} className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'} disabled:opacity-20`}>總程並聯</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-6 border-t border-white/5">
+                    <div className="flex gap-2.5 text-indigo-400 bg-indigo-500/5 p-4 rounded-2xl border border-indigo-500/10 shadow-inner">
+                      <span className="text-sm">⚙️</span>
+                      <p className="text-[9px] leading-relaxed font-medium">
+                        系統邏輯：若選「延用樣品」，包裝測試將排在 Track A 環境測試之後（+14D）。若選「獨立樣品」，可同步於 Track C 執行。
+                      </p>
+                    </div>
                   </div>
                 </div>
-              ))}
+              </aside>
             </div>
+          </div>
+        </div>
+      </main>
 
-            {/* Controls Side Panel - Hidden on mobile, shown on xl+ */}
-            <aside className="hidden xl:block xl:w-80 shrink-0 space-y-6">
-              <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl space-y-8 sticky top-6 border border-slate-800">
-                <div className="text-center">
-                  <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2">Strategy Settings</h3>
-                  <div className="h-0.5 w-12 bg-indigo-500 mx-auto rounded-full"></div>
-                </div>
+              {/* 手機版浮動底部控制面板 - 僅在 xl 以下顯示 */}
+              {mobileSettingsOpen && (
+                <div className="fixed inset-0 bg-black/40 xl:hidden z-40" onClick={() => setMobileSettingsOpen(false)} />
+              )}
+              <div className={`fixed bottom-0 left-0 right-0 xl:hidden bg-slate-900 border-t border-slate-700 z-50 transition-all duration-300 ${mobileSettingsOpen ? 'rounded-t-3xl' : ''}`}>
+                {/* 展開時的完整設定面板 */}
+                {mobileSettingsOpen && (
+                  <div className="p-5 pt-2 space-y-4 max-h-[70vh] overflow-y-auto">
+                    {/* 拖曳指示條 */}
+                    <div className="flex justify-center py-2">
+                      <div className="w-10 h-1 bg-slate-600 rounded-full"></div>
+                    </div>
 
-                <div className="space-y-6">
-                  {/* 型號名稱 */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">型號名稱</label>
-                    <input
-                      type="text"
-                      value={activeModel.name}
-                      onChange={(e) => updateActiveModel({ name: e.target.value })}
-                      placeholder="例：NAT-G102-T"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                    />
-                  </div>
-                  {/* Sample Requirements */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">樣品數量需求分配</label>
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] text-center">Strategy Settings</h3>
+
+                    {/* 型號名稱 */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">型號名稱</label>
+                      <input
+                        type="text"
+                        value={activeModel.name}
+                        onChange={(e) => updateActiveModel({ name: e.target.value })}
+                        placeholder="例：NAT-G102-T"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    {/* 樣品數量 - Track A / B 分開 */}
                     <div className="space-y-2">
-                      <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                        <span className="text-[10px] font-bold text-slate-400">Track A 樣品數量</span>
-                        <div className="flex items-center gap-3">
-                          <button onClick={() => updateActiveModel({ envSampleCount: Math.max(1, activeModel.envSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
-                          <span className="w-4 text-center font-bold tabular-nums">{activeModel.envSampleCount}</span>
-                          <button onClick={() => updateActiveModel({ envSampleCount: activeModel.envSampleCount + 1 })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">樣品數量需求</label>
+                      <div className="flex gap-2">
+                        <div className="flex-1 flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
+                          <span className="text-[10px] font-bold text-slate-400">Track A</span>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => updateActiveModel({ envSampleCount: Math.max(1, activeModel.envSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
+                            <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.envSampleCount}</span>
+                            <button onClick={() => updateActiveModel({ envSampleCount: activeModel.envSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
+                          </div>
                         </div>
                       </div>
-
-                      <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                        <span className="text-[10px] font-bold text-slate-400">Track B 樣品數量</span>
-                        <div className="flex items-center gap-3">
-                          <button onClick={() => updateActiveModel({ mechSampleCount: Math.max(0, activeModel.mechSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
-                          <span className="w-4 text-center font-bold tabular-nums">{activeModel.mechSampleCount}</span>
-                          <button onClick={() => updateActiveModel({ mechSampleCount: activeModel.mechSampleCount + 1 })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
+                      <div className="flex gap-2">
+                        <div className="flex-1 flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
+                          <span className="text-[10px] font-bold text-slate-400">Track B</span>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => updateActiveModel({ mechSampleCount: Math.max(0, activeModel.mechSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
+                            <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.mechSampleCount}</span>
+                            <button onClick={() => updateActiveModel({ mechSampleCount: activeModel.mechSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
+                          </div>
                         </div>
                       </div>
                       {pkgStrategy === PkgSampleStrategy.INDEPENDENT && (
                         <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                          <span className="text-[10px] font-bold text-slate-400">Track C 樣品數量</span>
-                          <div className="flex items-center gap-3">
-                            <button onClick={() => updateActiveModel({ pkgSampleCount: Math.max(1, activeModel.pkgSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
-                            <span className="w-4 text-center font-bold tabular-nums">{activeModel.pkgSampleCount}</span>
-                            <button onClick={() => updateActiveModel({ pkgSampleCount: activeModel.pkgSampleCount + 1 })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
+                          <span className="text-[10px] font-bold text-slate-400">Track C</span>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => updateActiveModel({ pkgSampleCount: Math.max(1, activeModel.pkgSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
+                            <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.pkgSampleCount}</span>
+                            <button onClick={() => updateActiveModel({ pkgSampleCount: activeModel.pkgSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
                           </div>
                         </div>
                       )}
                     </div>
-                  </div>
 
-                  {/* Storage Strategy - ADDED BACK */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Storage 類別執行</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => setStorageStrategy(ExecutionStrategy.SERIAL)}
-                        className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${storageStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
-                      >
-                        串聯模式
-                      </button>
-                      <button
-                        onClick={() => activeModel.envSampleCount >= 2 && setStorageStrategy(ExecutionStrategy.PARALLEL)}
-                        disabled={activeModel.envSampleCount < 2}
-                        className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${storageStrategy === ExecutionStrategy.PARALLEL && activeModel.envSampleCount >= 2 ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : activeModel.envSampleCount < 2 ? 'bg-white/5 text-slate-600 cursor-not-allowed opacity-50' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
-                      >
-                        並行模式
-                      </button>
-                    </div>
-                    {activeModel.envSampleCount < 2 && storageStrategy === ExecutionStrategy.PARALLEL && (
-                      <p className="text-[9px] text-amber-400 mt-1">⚠ Track A 樣品需 ≥ 2 才可啟用並聯</p>
-                    )}
-                  </div>
-
-                  {/* PKG Strategy */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PKG 樣品策略</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => setPkgStrategy(PkgSampleStrategy.REUSE)}
-                        className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${pkgStrategy === PkgSampleStrategy.REUSE ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
-                      >
-                        延用樣品
-                      </button>
-                      <button
-                        onClick={() => setPkgStrategy(PkgSampleStrategy.INDEPENDENT)}
-                        className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${pkgStrategy === PkgSampleStrategy.INDEPENDENT ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
-                      >
-                        獨立樣品
-                      </button>
-                    </div>
-                    <p className="text-[8px] text-slate-500 text-center font-medium italic mt-1">
-                      {pkgStrategy === PkgSampleStrategy.REUSE ? "💡 延用樣品需增加 14 天前置整理時間" : "💡 獨立樣品不需整理時間，但需額外樣品"}
-                    </p>
-                  </div>
-
-                  {/* Master Strategy */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">主關鍵路徑策略</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => setStrategy(ExecutionStrategy.SERIAL)} className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${calculationResults.currentStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}>總程串聯</button>
-                      <button disabled={calculationResults.totalUnits <= 1} onClick={() => setStrategy(ExecutionStrategy.PARALLEL)} className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'} disabled:opacity-20`}>總程並聯</button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-6 border-t border-white/5">
-                  <div className="flex gap-2.5 text-indigo-400 bg-indigo-500/5 p-4 rounded-2xl border border-indigo-500/10 shadow-inner">
-                    <span className="text-sm">⚙️</span>
-                    <p className="text-[9px] leading-relaxed font-medium">
-                      系統邏輯：若選「延用樣品」，包裝測試將排在 Track A 環境測試之後（+14D）。若選「獨立樣品」，可同步於 Track C 執行。
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </aside>
-
-            {/* 手機版浮動底部控制面板 - 僅在 xl 以下顯示 */}
-            {mobileSettingsOpen && (
-              <div className="fixed inset-0 bg-black/40 xl:hidden z-40" onClick={() => setMobileSettingsOpen(false)} />
-            )}
-            <div className={`fixed bottom-0 left-0 right-0 xl:hidden bg-slate-900 border-t border-slate-700 z-50 transition-all duration-300 ${mobileSettingsOpen ? 'rounded-t-3xl' : ''}`}>
-              {/* 展開時的完整設定面板 */}
-              {mobileSettingsOpen && (
-                <div className="p-5 pt-2 space-y-4 max-h-[70vh] overflow-y-auto">
-                  {/* 拖曳指示條 */}
-                  <div className="flex justify-center py-2">
-                    <div className="w-10 h-1 bg-slate-600 rounded-full"></div>
-                  </div>
-
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] text-center">Strategy Settings</h3>
-
-                  {/* 型號名稱 */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">型號名稱</label>
-                    <input
-                      type="text"
-                      value={activeModel.name}
-                      onChange={(e) => updateActiveModel({ name: e.target.value })}
-                      placeholder="例：NAT-G102-T"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                  </div>
-
-                  {/* 樣品數量 - Track A / B 分開 */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">樣品數量需求</label>
-                    <div className="flex gap-2">
-                      <div className="flex-1 flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                        <span className="text-[10px] font-bold text-slate-400">Track A</span>
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => updateActiveModel({ envSampleCount: Math.max(1, activeModel.envSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
-                          <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.envSampleCount}</span>
-                          <button onClick={() => updateActiveModel({ envSampleCount: activeModel.envSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
-                        </div>
+                    {/* Storage 策略 */}
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Storage 類別執行</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => setStorageStrategy(ExecutionStrategy.SERIAL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${storageStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>串聯模式</button>
+                        <button onClick={() => activeModel.envSampleCount >= 2 && setStorageStrategy(ExecutionStrategy.PARALLEL)} disabled={activeModel.envSampleCount < 2} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${storageStrategy === ExecutionStrategy.PARALLEL && activeModel.envSampleCount >= 2 ? 'bg-indigo-600 text-white' : activeModel.envSampleCount < 2 ? 'bg-white/10 text-slate-600 cursor-not-allowed opacity-50' : 'bg-white/10 text-slate-400'}`}>並行模式</button>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <div className="flex-1 flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                        <span className="text-[10px] font-bold text-slate-400">Track B</span>
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => updateActiveModel({ mechSampleCount: Math.max(0, activeModel.mechSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
-                          <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.mechSampleCount}</span>
-                          <button onClick={() => updateActiveModel({ mechSampleCount: activeModel.mechSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
-                        </div>
+
+                    {/* PKG 策略 */}
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PKG 樣品策略</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => setPkgStrategy(PkgSampleStrategy.REUSE)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${pkgStrategy === PkgSampleStrategy.REUSE ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>延用樣品</button>
+                        <button onClick={() => setPkgStrategy(PkgSampleStrategy.INDEPENDENT)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${pkgStrategy === PkgSampleStrategy.INDEPENDENT ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>獨立樣品</button>
+                      </div>
+                      <p className="text-[9px] text-slate-500 text-center italic">{pkgStrategy === PkgSampleStrategy.REUSE ? '💡 延用樣品需增加 14 天前置整理時間' : '💡 獨立樣品不需整理時間，但需額外樣品'}</p>
+                    </div>
+
+                    {/* 主關鍵路徑策略 */}
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">主關鍵路徑策略</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => setStrategy(ExecutionStrategy.SERIAL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${calculationResults.currentStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>總程串聯</button>
+                        <button disabled={calculationResults.totalUnits <= 1} onClick={() => setStrategy(ExecutionStrategy.PARALLEL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'} disabled:opacity-20`}>總程並聯</button>
                       </div>
                     </div>
-                    {pkgStrategy === PkgSampleStrategy.INDEPENDENT && (
-                      <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                        <span className="text-[10px] font-bold text-slate-400">Track C</span>
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => updateActiveModel({ pkgSampleCount: Math.max(1, activeModel.pkgSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
-                          <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.pkgSampleCount}</span>
-                          <button onClick={() => updateActiveModel({ pkgSampleCount: activeModel.pkgSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
-                        </div>
-                      </div>
-                    )}
                   </div>
+                )}
 
-                  {/* Storage 策略 */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Storage 類別執行</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => setStorageStrategy(ExecutionStrategy.SERIAL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${storageStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>串聯模式</button>
-                      <button onClick={() => activeModel.envSampleCount >= 2 && setStorageStrategy(ExecutionStrategy.PARALLEL)} disabled={activeModel.envSampleCount < 2} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${storageStrategy === ExecutionStrategy.PARALLEL && activeModel.envSampleCount >= 2 ? 'bg-indigo-600 text-white' : activeModel.envSampleCount < 2 ? 'bg-white/10 text-slate-600 cursor-not-allowed opacity-50' : 'bg-white/10 text-slate-400'}`}>並行模式</button>
-                    </div>
-                  </div>
-
-                  {/* PKG 策略 */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PKG 樣品策略</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => setPkgStrategy(PkgSampleStrategy.REUSE)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${pkgStrategy === PkgSampleStrategy.REUSE ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>延用樣品</button>
-                      <button onClick={() => setPkgStrategy(PkgSampleStrategy.INDEPENDENT)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${pkgStrategy === PkgSampleStrategy.INDEPENDENT ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>獨立樣品</button>
-                    </div>
-                    <p className="text-[9px] text-slate-500 text-center italic">{pkgStrategy === PkgSampleStrategy.REUSE ? '💡 延用樣品需增加 14 天前置整理時間' : '💡 獨立樣品不需整理時間，但需額外樣品'}</p>
-                  </div>
-
-                  {/* 主關鍵路徑策略 */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">主關鍵路徑策略</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => setStrategy(ExecutionStrategy.SERIAL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${calculationResults.currentStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>總程串聯</button>
-                      <button disabled={calculationResults.totalUnits <= 1} onClick={() => setStrategy(ExecutionStrategy.PARALLEL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'} disabled:opacity-20`}>總程並聯</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* 底部常駐摘要列 - 點擊展開/收合 */}
-              <div className="p-4" onClick={() => setMobileSettingsOpen(!mobileSettingsOpen)}>
-                <div className="flex items-center justify-between gap-3 max-w-lg mx-auto">
-                  <div className="flex items-center gap-3 text-white">
-                    <span className="text-[10px] font-bold text-slate-400">A:</span>
-                    <span className="font-bold tabular-nums text-sm">{activeModel.envSampleCount}</span>
-                    <span className="text-slate-600">|</span>
-                    <span className="text-[10px] font-bold text-slate-400">B:</span>
-                    <span className="font-bold tabular-nums text-sm">{activeModel.mechSampleCount}</span>
-                    {pkgStrategy === PkgSampleStrategy.INDEPENDENT && (<>
+                {/* 底部常駐摘要列 - 點擊展開/收合 */}
+                <div className="p-4" onClick={() => setMobileSettingsOpen(!mobileSettingsOpen)}>
+                  <div className="flex items-center justify-between gap-3 max-w-lg mx-auto">
+                    <div className="flex items-center gap-3 text-white">
+                      <span className="text-[10px] font-bold text-slate-400">A:</span>
+                      <span className="font-bold tabular-nums text-sm">{activeModel.envSampleCount}</span>
                       <span className="text-slate-600">|</span>
-                      <span className="text-[10px] font-bold text-slate-400">C:</span>
-                      <span className="font-bold tabular-nums text-sm">{activeModel.pkgSampleCount}</span>
-                    </>)}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[9px] font-bold px-2 py-1 rounded-lg ${pkgStrategy === PkgSampleStrategy.REUSE ? 'bg-indigo-600/30 text-indigo-300' : 'bg-amber-600/30 text-amber-300'}`}>{pkgStrategy === PkgSampleStrategy.REUSE ? '延用' : '獨立'}</span>
-                    <span className={`text-[9px] font-bold px-2 py-1 rounded-lg ${calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? 'bg-emerald-600/30 text-emerald-300' : 'bg-slate-600/30 text-slate-300'}`}>{calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? '並聯' : '串聯'}</span>
-                    <svg className={`w-4 h-4 text-slate-400 transition-transform ${mobileSettingsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M5 15l7-7 7 7" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      <span className="text-[10px] font-bold text-slate-400">B:</span>
+                      <span className="font-bold tabular-nums text-sm">{activeModel.mechSampleCount}</span>
+                      {pkgStrategy === PkgSampleStrategy.INDEPENDENT && (<>
+                        <span className="text-slate-600">|</span>
+                        <span className="text-[10px] font-bold text-slate-400">C:</span>
+                        <span className="font-bold tabular-nums text-sm">{activeModel.pkgSampleCount}</span>
+                      </>)}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[9px] font-bold px-2 py-1 rounded-lg ${pkgStrategy === PkgSampleStrategy.REUSE ? 'bg-indigo-600/30 text-indigo-300' : 'bg-amber-600/30 text-amber-300'}`}>{pkgStrategy === PkgSampleStrategy.REUSE ? '延用' : '獨立'}</span>
+                      <span className={`text-[9px] font-bold px-2 py-1 rounded-lg ${calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? 'bg-emerald-600/30 text-emerald-300' : 'bg-slate-600/30 text-slate-300'}`}>{calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? '並聯' : '串聯'}</span>
+                      <svg className={`w-4 h-4 text-slate-400 transition-transform ${mobileSettingsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M5 15l7-7 7 7" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      </main >
 
-      {/* Test Item Modal */}
-      {
-        editingTest && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
-            <form onSubmit={saveTestItem} className="bg-white rounded-[2.5rem] p-10 max-w-lg w-full shadow-2xl border border-slate-100 space-y-8 animate-in fade-in zoom-in duration-200">
-              <h3 className="text-2xl font-bold text-slate-900">測試項目編輯</h3>
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">項目名稱 (名稱含 "PKG" 可啟動特殊邏輯)</label>
-                  <input required type="text" value={editingTest.data.name || ''} onChange={e => setEditingTest({ ...editingTest, data: { ...editingTest.data, name: e.target.value } })} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all" />
-                </div>
-                <div className="flex gap-4">
-                  <div className="flex-1 space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">工期 (WD)</label>
-                    <input required type="number" step="0.5" value={editingTest.data.duration || ''} onChange={e => setEditingTest({ ...editingTest, data: { ...editingTest.data, duration: parseFloat(e.target.value) } })} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all" />
+              {/* Test Item Modal */}
+              {
+                editingTest && (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+                    <form onSubmit={saveTestItem} className="bg-white rounded-[2.5rem] p-10 max-w-lg w-full shadow-2xl border border-slate-100 space-y-8 animate-in fade-in zoom-in duration-200">
+                      <h3 className="text-2xl font-bold text-slate-900">測試項目編輯</h3>
+                      <div className="space-y-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">項目名稱 (名稱含 "PKG" 可啟動特殊邏輯)</label>
+                          <input required type="text" value={editingTest.data.name || ''} onChange={e => setEditingTest({ ...editingTest, data: { ...editingTest.data, name: e.target.value } })} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all" />
+                        </div>
+                        <div className="flex gap-4">
+                          <div className="flex-1 space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">工期 (WD)</label>
+                            <input required type="number" step="0.5" value={editingTest.data.duration || ''} onChange={e => setEditingTest({ ...editingTest, data: { ...editingTest.data, duration: parseFloat(e.target.value) } })} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all" />
+                          </div>
+                          <div className="flex-[2] space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">所屬類別</label>
+                            <select value={editingTest.data.category} onChange={e => setEditingTest({ ...editingTest, data: { ...editingTest.data, category: e.target.value as CategoryType } })} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all appearance-none cursor-pointer">
+                              {Object.values(CategoryType).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-3 pt-2">
+                        <button type="button" onClick={() => setEditingTest(null)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-200">取消</button>
+                        <button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-lg hover:bg-slate-800 transition-all">儲存測項</button>
+                      </div>
+                    </form>
                   </div>
-                  <div className="flex-[2] space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">所屬類別</label>
-                    <select value={editingTest.data.category} onChange={e => setEditingTest({ ...editingTest, data: { ...editingTest.data, category: e.target.value as CategoryType } })} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all appearance-none cursor-pointer">
-                      {Object.values(CategoryType).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setEditingTest(null)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-200">取消</button>
-                <button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-lg hover:bg-slate-800 transition-all">儲存測項</button>
-              </div>
-            </form>
-          </div>
-        )
-      }
+                )
+              }
 
+              
       {/* Application Domain Modal */}
       {
         editingStandard && (
