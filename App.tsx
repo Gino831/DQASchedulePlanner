@@ -469,7 +469,7 @@ const App: React.FC = () => {
             days += totalStorageDays;
           }
           const row = {
-            id: `dut_env_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+            id: `dut_env_${model.id}_${rowCounter}`, modelId: model.id, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
             track: 'A', trackLabel: 'ENV', startDay: baseStartDay, segments: segs, totalDays: days,
           };
           envRows.push(row);
@@ -483,7 +483,7 @@ const App: React.FC = () => {
         const segs = [...appendEnvBF(), ...storageSegments];
         const sDays = envBfDays + totalStorageDays;
         const row = {
-          id: `dut_storage_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+          id: `dut_storage_${model.id}_${rowCounter}`, modelId: model.id, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
           track: 'A', trackLabel: 'Storage', startDay: baseStartDay, segments: segs, totalDays: sDays,
         };
         modelDuts.push(row);
@@ -578,6 +578,7 @@ const App: React.FC = () => {
 
             const row = {
               id: `dut_mech_${model.id}_${rowCounter}`,
+              modelId: model.id,
               label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
               track: 'B',
               trackLabel: 'S&V',
@@ -600,7 +601,7 @@ const App: React.FC = () => {
           envRows[0].totalDays += altitudeDays;
         } else {
           modelDuts.push({
-            id: `dut_alt_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+            id: `dut_alt_${model.id}_${rowCounter}`, modelId: model.id, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
             track: 'A', trackLabel: 'ENV (Alt)', startDay: baseStartDay, segments: [...appendEnvBF(), ...altitudeSegments], totalDays: envBfDays + altitudeDays,
           });
           rowCounter++;
@@ -610,7 +611,7 @@ const App: React.FC = () => {
       if (ipOtherSegments.length > 0) {
         if (singleSampleStrategy === SingleSampleStrategy.INDEPENDENT) {
           modelDuts.push({
-            id: `dut_ip_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+            id: `dut_ip_${model.id}_${rowCounter}`, modelId: model.id, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
             track: 'D', trackLabel: 'IP/Misc', startDay: baseStartDay, segments: [...appendGeneralBF(), ...ipOtherSegments], totalDays: generalBfDays + ipOtherDays,
           });
           rowCounter++;
@@ -622,7 +623,7 @@ const App: React.FC = () => {
             candidates[0].totalDays += ipOtherDays;
           } else {
             modelDuts.push({
-              id: `dut_ip_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+              id: `dut_ip_${model.id}_${rowCounter}`, modelId: model.id, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
               track: 'A', trackLabel: 'IP/Misc', startDay: baseStartDay, segments: [...appendEnvBF(), ...ipOtherSegments], totalDays: envBfDays + ipOtherDays,
             });
             rowCounter++;
@@ -691,7 +692,7 @@ const App: React.FC = () => {
         // 且因為是獨立機台，不需重新整理，所以不需要 14 天前置作業
         for (let i = 0; i < task.pkgSampleCount; i++) {
           const row = {
-            id: `dut_pkg_${task.model.id}_${rCounter}`, label: `DUT ${String(rCounter).padStart(2, '0')} - ${task.model.name}`,
+            id: `dut_pkg_${task.model.id}_${rCounter}`, modelId: task.model.id, label: `DUT ${String(rCounter).padStart(2, '0')} - ${task.model.name}`,
             track: 'C' as any, trackLabel: 'PKG', startDay: task.baseStartDay,
             segments: [...appendGlobalPkgBF(task.pkgBfDays), ...task.pkgSegments],
             totalDays: task.pkgBfDays + task.pkgDays,
@@ -738,9 +739,7 @@ const App: React.FC = () => {
       });
     } else {
       allDutRows.sort((a, b) => {
-        const modelA = a.id.split('_')[2];
-        const modelB = b.id.split('_')[2];
-        if (modelA !== modelB) return modelA.localeCompare(modelB);
+        if (a.modelId !== b.modelId) return String(a.modelId).localeCompare(String(b.modelId));
         return String(a.track).localeCompare(String(b.track));
       });
     }
