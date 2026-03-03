@@ -114,10 +114,10 @@ const CATEGORY_COLORS: Record<string, { bg: string, text: string, label: string 
 
 // DUT Track 標籤配色
 const TRACK_LABEL_COLORS: Record<string, string> = {
-  A: 'bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200',
-  B: 'bg-orange-50 text-orange-600 ring-1 ring-orange-200',
-  C: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
-  D: 'bg-sky-50 text-sky-600 ring-1 ring-sky-200',
+  A: 'bg-indigo-50 text-indigo-600 border border-indigo-200 shadow-[0_1px_2px_rgba(79,70,229,0.1)]',
+  B: 'bg-orange-50 text-orange-600 border border-orange-200 shadow-[0_1px_2px_rgba(234,88,12,0.1)]',
+  C: 'bg-slate-50 text-slate-600 border border-slate-200 shadow-[0_1px_2px_rgba(148,163,184,0.1)]',
+  D: 'bg-sky-50 text-sky-600 border border-sky-200 shadow-[0_1px_2px_rgba(2,132,199,0.1)]',
 };
 
 const App: React.FC = () => {
@@ -842,7 +842,7 @@ const App: React.FC = () => {
                 </div>
 
                 {/* DUT 列 */}
-                <div className="space-y-1.5 max-h-[40vh] xl:max-h-[50vh] overflow-y-auto pr-1 flex-1">
+                <div className="space-y-2 max-h-[40vh] xl:max-h-[50vh] overflow-y-auto pr-1 pl-1 py-1 flex-1">
                   {calculationResults.dutRows.map(dut => (
                     <div key={dut.id} className="flex items-center gap-2">
                       <div className="w-48 lg:w-56 shrink-0 flex items-center justify-start gap-2 pr-2">
