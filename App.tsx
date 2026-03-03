@@ -695,19 +695,13 @@ const App: React.FC = () => {
       const activePrepDays = 14 + task.pkgBfDays;
       let rCounter = task.rowCounterOffset;
       if (pkgStrategy === PkgSampleStrategy.INDEPENDENT) {
-        // 獨立樣品：全部統一在此時間 (globalMaxEnvEndDay) 同步啟動前置作業
+        // 獨立樣品（並行）：有額外獨立機台，不需等待其他機台對齊，可直接開始
         for (let i = 0; i < task.pkgSampleCount; i++) {
-          let offset = globalMaxEnvEndDay - task.baseStartDay;
-          if (offset < 0) offset = 0;
-          let waitSegments: Seg[] = [];
-          if (offset > 0) {
-            waitSegments.push({ label: '等候對齊', days: offset, bg: 'bg-transparent border-t border-b border-dashed border-slate-300', text: 'text-slate-400 italic', isWait: true });
-          }
           const row = {
             id: `dut_pkg_${task.model.id}_${rCounter}`, label: `DUT ${String(rCounter).padStart(2, '0')} - ${task.model.name}`,
             track: 'C' as any, trackLabel: 'PKG', startDay: task.baseStartDay,
-            segments: [...waitSegments, ...task.prepSegments, ...appendGlobalPkgBF(task.pkgBfDays), ...task.pkgSegments],
-            totalDays: offset + activePrepDays + task.pkgDays,
+            segments: [...task.prepSegments, ...appendGlobalPkgBF(task.pkgBfDays), ...task.pkgSegments],
+            totalDays: activePrepDays + task.pkgDays,
           };
           allDutRows.push(row);
 
