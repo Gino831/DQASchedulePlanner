@@ -1084,7 +1084,7 @@ const App: React.FC = () => {
                         <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
                           <span className="text-[10px] font-bold text-slate-400">[包裝/PKG] 樣品需求</span>
                           <div className="flex items-center gap-3">
-                            <button onClick={() => updateActiveModel({ pkgSampleCount: Math.max(1, activeModel.pkgSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
+                            <button onClick={() => updateActiveModel({ pkgSampleCount: Math.max(0, activeModel.pkgSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
                             <span className="w-4 text-center font-bold tabular-nums">{activeModel.pkgSampleCount}</span>
                             <button onClick={() => updateActiveModel({ pkgSampleCount: activeModel.pkgSampleCount + 1 })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
                           </div>
