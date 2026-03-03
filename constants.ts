@@ -14,8 +14,8 @@ export const DEFAULT_MANDATORY_TESTS = {
 
 const mergeMandatory = (standard: StandardData): StandardData => {
   const newCategories = { ...standard.categories };
-  
-  // 處理 Function 類別 (Track A / PKG Track)
+
+  // 處理 Function 類別 (Chamber / PKG Track)
   const existingFunc = newCategories[CategoryType.FUNCTION] || [];
   const mandatoryFunc = DEFAULT_MANDATORY_TESTS[CategoryType.FUNCTION]
     .filter(item => {
@@ -29,7 +29,7 @@ const mergeMandatory = (standard: StandardData): StandardData => {
     }));
   newCategories[CategoryType.FUNCTION] = [...mandatoryFunc, ...existingFunc];
 
-  // 處理 Vib/Shock 類別 (Track B)
+  // 處理 Vib/Shock 類別 (S&V)
   const existingVib = newCategories[CategoryType.VIB_SHOCK] || [];
   const mandatoryVib = DEFAULT_MANDATORY_TESTS[CategoryType.VIB_SHOCK].map(item => ({
     ...item,

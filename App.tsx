@@ -69,36 +69,44 @@ const getDefaultSelectedTests = (standards: StandardData[]): Record<string, Reco
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
-const createDefaultModel = (standards: StandardData[], standardId: string = 'moxa', modelName: string = 'NAT-G102-T'): ModelEntry => {
+const createDefaultModel = (standards: StandardData[], initialStandardIds: string[] = ['moxa'], modelName: string = 'NAT-G102-T'): ModelEntry => {
+  const allDefaults = getDefaultSelectedTests(standards);
+  const mergedTests: Record<string, boolean> = {};
+  initialStandardIds.forEach(sid => Object.assign(mergedTests, allDefaults[sid] || {}));
   return {
     id: `m_${generateId()}`,
     name: modelName,
-    standardId: standardId,
-    selectedTests: getDefaultSelectedTests(standards)[standardId] || {},
+    standardIds: initialStandardIds,
+    selectedTests: mergedTests,
     envSampleCount: 1,
     mechSampleCount: 1,
-    pkgSampleCount: 1
+    pkgSampleCount: 1,
+    mechStrategy: ExecutionStrategy.PARALLEL
   };
 };
 
+// 各標準固定顏色（側欄圖示、甘特圖分段、圖例共用，確保全應用一致性）
+const STANDARD_FIXED_COLORS: Record<string, { bg: string, text: string, label: string }> = {
+  moxa: { bg: 'bg-indigo-500', text: 'text-white', label: 'Moxa' },
+  railway: { bg: 'bg-amber-500', text: 'text-white', label: 'Railway' },
+  marine: { bg: 'bg-cyan-500', text: 'text-white', label: 'Marine' },
+  power: { bg: 'bg-emerald-500', text: 'text-white', label: 'Power' },
+};
+
+// 側欄圖示色（與 STANDARD_FIXED_COLORS 一致）
 const APP_COLORS: Record<string, string> = {
-  moxa: 'bg-indigo-600',
+  moxa: 'bg-indigo-500',
   railway: 'bg-amber-500',
-  marine: 'bg-cyan-600',
-  power: 'bg-emerald-600',
+  marine: 'bg-cyan-500',
+  power: 'bg-emerald-500',
   default: 'bg-slate-500',
   pkg_prep: 'bg-slate-200',
   pkg_item: 'bg-slate-800'
 };
 
-// DUT 甘特圖 - 類別配色設定
+// DUT 甘特圖 - 特殊類別配色（BF、Storage、PKG 等非標準色）
 const CATEGORY_COLORS: Record<string, { bg: string, text: string, label: string }> = {
   [CategoryType.FUNCTION]: { bg: 'bg-cyan-500', text: 'text-white', label: 'BF' },
-  [CategoryType.CHAMBER]: { bg: 'bg-yellow-400', text: 'text-yellow-900', label: 'Chamber' },
-  [CategoryType.VIB_SHOCK]: { bg: 'bg-orange-500', text: 'text-white', label: 'S&V' },
-  [CategoryType.DUST_TEST]: { bg: 'bg-lime-500', text: 'text-lime-900', label: 'Dust' },
-  [CategoryType.WATER_TEST]: { bg: 'bg-blue-400', text: 'text-white', label: 'Water' },
-  [CategoryType.OTHER]: { bg: 'bg-purple-400', text: 'text-white', label: 'Other' },
   storage: { bg: 'bg-amber-500', text: 'text-white', label: 'Storage' },
   pkg: { bg: 'bg-slate-800', text: 'text-white', label: 'PKG' },
   prep: { bg: 'bg-slate-200', text: 'text-slate-500', label: '前置作業' },
@@ -122,12 +130,18 @@ const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((m: any) => ({
+            ...m,
+            standardIds: m.standardIds || (m.standardId ? [m.standardId] : ['moxa']),
+            mechStrategy: m.mechStrategy || ExecutionStrategy.PARALLEL,
+          }));
+        }
       } catch (e) {
         console.error("Failed to parse saved models", e);
       }
     }
-    return [createDefaultModel(standards, 'moxa', 'Default Model')];
+    return [createDefaultModel(standards, ['moxa'], 'Default Model')];
   });
 
   const [activeModelId, setActiveModelId] = useState<string>(models[0]?.id || '');
@@ -155,7 +169,7 @@ const App: React.FC = () => {
   }, [models]);
 
   const activeModel = models.find(m => m.id === activeModelId) || models[0];
-  const activeApps = [activeModel.standardId];
+  const activeApps = activeModel.standardIds || [];
 
   const updateActiveModel = (updates: Partial<ModelEntry>) => {
     setModels(prev => prev.map(m => m.id === activeModelId ? { ...m, ...updates } : m));
@@ -167,11 +181,27 @@ const App: React.FC = () => {
   }, [standards]);
 
   const toggleApp = (appId: string) => {
-    updateActiveModel({ standardId: appId });
+    const current = activeModel.standardIds || [];
+    if (current.includes(appId)) {
+      // 取消選取：移除該標準 ID
+      const updated = current.filter(id => id !== appId);
+      if (updated.length === 0) return;
+      updateActiveModel({ standardIds: updated } as any);
+    } else {
+      // 新增選取：合併預設勾選測項（不取消已勾選項目）
+      const updated = [...current, appId];
+      const allDefaults = getDefaultSelectedTests(standards);
+      const newDefaults = allDefaults[appId] || {};
+      const mergedTests = { ...activeModel.selectedTests };
+      Object.entries(newDefaults).forEach(([key, val]) => {
+        if (val) mergedTests[key] = true; // 只新增，不覆蓋
+      });
+      updateActiveModel({ standardIds: updated, selectedTests: mergedTests } as any);
+    }
   };
 
   const toggleTest = (standardId: string, itemId: string) => {
-    if (activeModel.standardId !== standardId) return;
+    if (!activeModel.standardIds?.includes(standardId)) return;
     const currentSelection = activeModel.selectedTests || {};
     updateActiveModel({
       selectedTests: { ...currentSelection, [itemId]: !currentSelection[itemId] }
@@ -179,14 +209,14 @@ const App: React.FC = () => {
   };
 
   const toggleAllInStandard = (standard: StandardData, select: boolean) => {
-    if (activeModel.standardId !== standard.id) return;
-    const standardSelection: Record<string, boolean> = {};
+    if (!activeModel.standardIds?.includes(standard.id)) return;
+    const currentSelection = { ...(activeModel.selectedTests || {}) };
     Object.values(standard.categories).forEach(items => {
       items?.forEach(item => {
-        standardSelection[item.id] = select;
+        currentSelection[item.id] = select;
       });
     });
-    updateActiveModel({ selectedTests: standardSelection });
+    updateActiveModel({ selectedTests: currentSelection });
   };
 
   const deleteTestItem = (e: React.MouseEvent, standardId: string, category: CategoryType, itemId: string) => {
@@ -202,7 +232,7 @@ const App: React.FC = () => {
       return { ...s, categories: updatedCats };
     }));
     setModels(prev => prev.map(m => {
-      if (m.standardId !== standardId) return m;
+      if (!m.standardIds?.includes(standardId)) return m;
       const updatedTests = { ...m.selectedTests };
       delete updatedTests[itemId];
       return { ...m, selectedTests: updatedTests };
@@ -247,6 +277,14 @@ const App: React.FC = () => {
     let globalTrackBTotal = 0;
     let globalTrackCTotal = 0;
     let globalTotalUnits = 0;
+    let globalLastMechEndDay = 0;
+    const allPkgTasks: any[] = [];
+
+    // S&V 並行模式：全局設備時間槽排程
+    // 相同應用跨型號可共用設備（並行），不同應用必須依序（設備只能設定一種條件）
+    // key = 應用 ID, value = 該應用的設備時間槽位移（相對於 BF 結束後的天數）
+    const mechParallelSlots: Record<string, number> = {};
+    let mechParallelNextSlot = 0; // 下一個未使用槽位的起始位移
 
     type Seg = { label: string; days: number; bg: string; text: string; isWait?: boolean };
     const allDutRows: Array<{
@@ -256,121 +294,166 @@ const App: React.FC = () => {
 
     // 處理每個獨立的 model
     models.forEach((model, mIndex) => {
-      const standard = standards.find(s => s.id === model.standardId);
-      if (!standard) return;
+      const selectedStandards = standards.filter(s => (model.standardIds || []).includes(s.id));
+      if (selectedStandards.length === 0) return;
 
       const selectedMap = model.selectedTests || {};
 
+      // 各測項分類 — 合併為每標準每類別一個段落，多選標準以不同顏色區分
       const envBaseSegments: Seg[] = [];
       let envBaseDays = 0;
-
       const storageSegments: Seg[] = [];
       let totalStorageDays = 0;
-
       const altitudeSegments: Seg[] = [];
       let altitudeDays = 0;
-
       const connectorSegments: Seg[] = [];
       let connectorDays = 0;
-
       const ipOtherSegments: Seg[] = [];
       let ipOtherDays = 0;
-
       const mechSegments: Seg[] = [];
       let mechDays = 0;
-
       const pkgSegments: Seg[] = [];
       let pkgDays = 0;
-
-      // NEW: Split BF days by category
       let envBfDays = 0;
       let mechBfDays = 0;
-      let pkgBfDays = 0; 
-      // Also track general BF for Track D (IP/Other if independent)
+      let pkgBfDays = 0;
       let generalBfDays = 0;
 
-      Object.entries(standard.categories).forEach(([cat, items]) => {
-        const catType = cat as CategoryType;
-        (items as any[] | undefined)?.forEach(item => {
-          if (selectedMap[item.id]) {
-            const nameLower = item.name.toLowerCase();
-            const isPkg = nameLower.includes('pkg') || nameLower.includes('包裝');
-            const isStorage = nameLower.includes('storage');
-            const isAltitude = nameLower.includes('altitude') || item.name.includes('高空');
-            const isBF = nameLower.includes('basic function') || item.name.includes('基本功能');
-            const isConnector = (nameLower.includes('connector') || item.name.includes('插拔') || nameLower.includes('durability')) && !isAltitude && !isStorage && !isPkg && !isBF;
-            
-            // ipOther includes DUST, WATER, OTHER categories (except altitude and connector)
-            const isIpOtherCategory = [CategoryType.DUST_TEST, CategoryType.WATER_TEST, CategoryType.OTHER].includes(catType);
+      const mechSegsPerStd: Array<{ segs: Seg[], days: number, standardId?: string }> = selectedStandards.map(() => ({ segs: [], days: 0 }));
 
-            if (isPkg && isBF) {
-              pkgBfDays += item.duration; // It's uniquely a PKG Basic Function
-            } else if (isBF) {
-              if (catType === CategoryType.VIB_SHOCK) {
-                mechBfDays += item.duration; // Mechanical Basic Function
-              } else if (catType === CategoryType.CHAMBER || catType === CategoryType.FUNCTION) {
-                envBfDays += item.duration; // Chamber/Environmental Basic Function
+      // 遍歷所有已選標準，累計每類別天數後推入合併段落
+      const multiStd = selectedStandards.length > 1;
+      selectedStandards.forEach((standard, stdIndex) => {
+        const stdTag = multiStd ? `[${standard.name.replace(/\s*(Industrial|法規|標準)/gi, '').trim()}] ` : '';
+        // 使用各標準固定顏色，確保全應用一致性
+        const stdFixedColor = STANDARD_FIXED_COLORS[standard.id] || { bg: 'bg-slate-400', text: 'text-white' };
+        const getColor = () => ({ bg: stdFixedColor.bg, text: stdFixedColor.text });
+
+        // 累計此標準各類別的總天數
+        let stdEnvDays = 0;
+        let stdStorageDays = 0;
+        let stdAltDays = 0;
+        let stdConnDays = 0;
+        let stdIpDays = 0;
+        let stdMechDays = 0;
+        let stdPkgDays = 0;
+
+        Object.entries(standard.categories).forEach(([cat, items]) => {
+          const catType = cat as CategoryType;
+          (items as any[] | undefined)?.forEach(item => {
+            if (selectedMap[item.id]) {
+              const nameLower = item.name.toLowerCase();
+              const isPkg = nameLower.includes('pkg') || nameLower.includes('包裝');
+              const isStorage = nameLower.includes('storage');
+              const isAltitude = nameLower.includes('altitude') || item.name.includes('高空');
+              const isBF = nameLower.includes('basic function') || item.name.includes('基本功能');
+              const isConnector = (nameLower.includes('connector') || item.name.includes('插拔') || nameLower.includes('durability')) && !isAltitude && !isStorage && !isPkg && !isBF;
+              const isIpOtherCategory = [CategoryType.DUST_TEST, CategoryType.WATER_TEST, CategoryType.OTHER].includes(catType);
+
+              if (isPkg && isBF) {
+                pkgBfDays = Math.max(pkgBfDays, item.duration);
+              } else if (isBF) {
+                if (catType === CategoryType.VIB_SHOCK) mechBfDays = Math.max(mechBfDays, item.duration);
+                else if (catType === CategoryType.CHAMBER || catType === CategoryType.FUNCTION) envBfDays = Math.max(envBfDays, item.duration);
+                generalBfDays = Math.max(generalBfDays, item.duration);
+              } else if (isPkg) {
+                stdPkgDays += item.duration;
+              } else if (isStorage) {
+                stdStorageDays += item.duration;
+              } else if (isAltitude) {
+                stdAltDays += item.duration;
+              } else if (isConnector) {
+                stdConnDays += item.duration;
+              } else if (isIpOtherCategory) {
+                stdIpDays += item.duration;
+              } else if ([CategoryType.CHAMBER].includes(catType)) {
+                stdEnvDays += item.duration;
+              } else {
+                stdMechDays += item.duration;
               }
-              // Track a max of any BF to be used as fallback for Track D if needed
-              generalBfDays = Math.max(generalBfDays, item.duration);
-            } else if (isPkg) {
-              pkgSegments.push({ label: CATEGORY_COLORS.pkg.label, days: item.duration, bg: CATEGORY_COLORS.pkg.bg, text: CATEGORY_COLORS.pkg.text });
-              pkgDays += item.duration;
-            } else if (isStorage) {
-              storageSegments.push({ label: CATEGORY_COLORS.storage.label, days: item.duration, bg: CATEGORY_COLORS.storage.bg, text: CATEGORY_COLORS.storage.text });
-              totalStorageDays += item.duration;
-            } else if (isAltitude && !isIpOtherCategory) {
-               altitudeSegments.push({ label: '✈️ (外測) ' + (CATEGORY_COLORS[catType]?.label || '高空'), days: item.duration, bg: 'bg-amber-100 border-amber-300', text: 'text-amber-800 font-bold' });
-               altitudeDays += item.duration;
-            } else if (isConnector) {
-               connectorSegments.push({ label: CATEGORY_COLORS[catType]?.label || '插拔', days: item.duration, bg: CATEGORY_COLORS[catType]?.bg || 'bg-slate-100', text: CATEGORY_COLORS[catType]?.text || 'text-slate-600' });
-               connectorDays += item.duration;
-            } else if (isIpOtherCategory || isAltitude) {
-               if (isAltitude) {
-                 altitudeSegments.push({ label: '✈️ (外測) 高空', days: item.duration, bg: 'bg-amber-100 border-amber-300', text: 'text-amber-800 font-bold' });
-                 altitudeDays += item.duration;
-               } else {
-                 ipOtherSegments.push({ label: CATEGORY_COLORS[catType]?.label || '其他', days: item.duration, bg: CATEGORY_COLORS[catType]?.bg || 'bg-slate-100', text: CATEGORY_COLORS[catType]?.text || 'text-slate-600' });
-                 ipOtherDays += item.duration;
-               }
-            } else if ([CategoryType.CHAMBER].includes(catType)) {
-              envBaseSegments.push({ label: CATEGORY_COLORS[catType]?.label || '環境', days: item.duration, bg: CATEGORY_COLORS[catType]?.bg || 'bg-slate-100', text: CATEGORY_COLORS[catType]?.text || 'text-slate-600' });
-              envBaseDays += item.duration;
-            } else {
-              mechSegments.push({ label: CATEGORY_COLORS[catType]?.label || '震動', days: item.duration, bg: CATEGORY_COLORS[catType]?.bg || 'bg-slate-100', text: CATEGORY_COLORS[catType]?.text || 'text-slate-600' });
-              mechDays += item.duration;
             }
-          }
+          });
         });
+
+        // 推入合併段落：每標準每類別一個 segment
+        if (stdEnvDays > 0) {
+          const c = getColor();
+          envBaseSegments.push({ label: stdTag + 'Chamber', days: stdEnvDays, bg: c.bg, text: c.text });
+          envBaseDays += stdEnvDays;
+        }
+        if (stdStorageDays > 0) {
+          const c = getColor();
+          storageSegments.push({ label: stdTag + 'Storage', days: stdStorageDays, bg: c.bg, text: c.text });
+          totalStorageDays += stdStorageDays;
+        }
+        if (stdAltDays > 0) {
+          altitudeSegments.push({ label: stdTag + '✈️ 高空', days: stdAltDays, bg: 'bg-amber-100 border-amber-300', text: 'text-amber-800 font-bold' });
+          altitudeDays += stdAltDays;
+        }
+        if (stdConnDays > 0) {
+          const c = getColor();
+          connectorSegments.push({ label: stdTag + '插拔', days: stdConnDays, bg: c.bg, text: c.text });
+          connectorDays += stdConnDays;
+        }
+        if (stdIpDays > 0) {
+          const c = getColor();
+          ipOtherSegments.push({ label: stdTag + 'IP/Other', days: stdIpDays, bg: c.bg, text: c.text });
+          ipOtherDays += stdIpDays;
+        }
+        if (stdMechDays > 0) {
+          const c = getColor();
+          const newSeg = { label: stdTag + 'S&V', days: stdMechDays, bg: c.bg, text: c.text, standardId: standard.id };
+          mechSegments.push(newSeg);
+          mechDays += stdMechDays;
+          mechSegsPerStd[stdIndex].segs.push(newSeg);
+          mechSegsPerStd[stdIndex].days += stdMechDays;
+          mechSegsPerStd[stdIndex].standardId = standard.id;
+        }
+        if (stdPkgDays > 0) {
+          const c = getColor();
+          pkgSegments.push({ label: stdTag + 'PKG', days: stdPkgDays, bg: c.bg, text: c.text });
+          pkgDays += stdPkgDays;
+        }
       });
 
-      // --- 建立 DUT Rows ---
-      
+      const activeMechStds = mechSegsPerStd.filter(s => s.days > 0);
+      const mechBins = Array.from({ length: Math.max(1, model.mechSampleCount) }, (_, i) => {
+        if (activeMechStds.length === 0) return { segments: [], totalDays: 0 };
+        if (model.mechStrategy === ExecutionStrategy.SERIAL) {
+          // 串聯模式：一個 DUT 只執行一種應用的 S&V（共用設備，DUT 間依序執行）
+          const stdData = activeMechStds[i % activeMechStds.length];
+          return { segments: [...stdData.segs], totalDays: stdData.days };
+        } else {
+          // 並聯模式：一台樣品只執行一種應用的 S&V（round-robin 分配）
+          // 相同應用的不同型號可共用設備、時程對齊
+          const stdData = activeMechStds[i % activeMechStds.length];
+          return { segments: [...stdData.segs], totalDays: stdData.days };
+        }
+      });
+
+      // --- 建立共用 DUT Rows（樣品共用，所有標準在同一 DUT 行上依序排列）---
       const appendEnvBF = () => envBfDays > 0 ? [{ label: CATEGORY_COLORS[CategoryType.FUNCTION]?.label || 'Basic Func', days: envBfDays, bg: CATEGORY_COLORS[CategoryType.FUNCTION]?.bg || 'bg-sky-100', text: CATEGORY_COLORS[CategoryType.FUNCTION]?.text || 'text-sky-600' }] : [];
       const appendMechBF = () => mechBfDays > 0 ? [{ label: CATEGORY_COLORS[CategoryType.FUNCTION]?.label || 'Basic Func', days: mechBfDays, bg: CATEGORY_COLORS[CategoryType.FUNCTION]?.bg || 'bg-sky-100', text: CATEGORY_COLORS[CategoryType.FUNCTION]?.text || 'text-sky-600' }] : [];
       const appendPkgBF = () => pkgBfDays > 0 ? [{ label: 'PKG Basic Func', days: pkgBfDays, bg: 'bg-sky-100', text: 'text-sky-600' }] : [];
       const appendGeneralBF = () => generalBfDays > 0 ? [{ label: CATEGORY_COLORS[CategoryType.FUNCTION]?.label || 'Basic Func', days: generalBfDays, bg: CATEGORY_COLORS[CategoryType.FUNCTION]?.bg || 'bg-sky-100', text: CATEGORY_COLORS[CategoryType.FUNCTION]?.text || 'text-sky-600' }] : [];
 
-
       const modelDuts: Array<any> = [];
       let rowCounter = 1;
-      const baseStartDay = strategy === ExecutionStrategy.SERIAL ? globalTrackATotal : 0; 
+      const baseStartDay = strategy === ExecutionStrategy.SERIAL ? globalTrackATotal : 0;
 
       const storageIsParallel = storageStrategy === ExecutionStrategy.PARALLEL && totalStorageDays > 0 && model.envSampleCount >= 2;
       const envDutCount = storageIsParallel ? (model.envSampleCount - 1) : model.envSampleCount;
 
-      // 1. 產生 Track A (ENV Base + Storage if serial)
+      // 1. Track A (ENV) — 合併所有標準的 Chamber 段落在同一 DUT 行
       const envRows: any[] = [];
       if (envDutCount > 0 && (envBaseSegments.length > 0 || envBfDays > 0 || (storageSegments.length > 0 && !storageIsParallel))) {
         for (let i = 0; i < envDutCount; i++) {
           const segs = [...appendEnvBF(), ...envBaseSegments];
           let days = envBfDays + envBaseDays;
-          
           if (!storageIsParallel && storageSegments.length > 0) {
             segs.push(...storageSegments);
             days += totalStorageDays;
           }
-
           const row = {
             id: `dut_env_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
             track: 'A', trackLabel: 'ENV', startDay: baseStartDay, segments: segs, totalDays: days,
@@ -381,11 +464,10 @@ const App: React.FC = () => {
         }
       }
 
-      // 2. 獨立的 Storage 樣品 (Track A)
+      // 2. Storage 獨立
       if (storageIsParallel) {
         const segs = [...appendEnvBF(), ...storageSegments];
         const sDays = envBfDays + totalStorageDays;
-        
         const row = {
           id: `dut_storage_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
           track: 'A', trackLabel: 'Storage', startDay: baseStartDay, segments: segs, totalDays: sDays,
@@ -395,30 +477,113 @@ const App: React.FC = () => {
         rowCounter++;
       }
 
-      // 3. 產生 Track B (Mech)
+      // 3. Track B (S&V) — 依型號策略決定並聯或串聯
       const mechRows: any[] = [];
-      const mechStart = baseStartDay;
       if (model.mechSampleCount > 0 && (mechSegments.length > 0 || mechBfDays > 0)) {
-        for (let i = 0; i < model.mechSampleCount; i++) {
-          const row = {
-            id: `dut_mech_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
-            track: 'B', trackLabel: 'S&V', startDay: mechStart, segments: [...appendMechBF(), ...mechSegments], totalDays: mechBfDays + mechDays,
-          };
-          mechRows.push(row);
-          modelDuts.push(row);
-          rowCounter++;
+        if (model.mechStrategy === ExecutionStrategy.SERIAL) {
+          // 串聯模式：跨型號全局接續執行 
+          let equipmentStartDay = Math.max(baseStartDay + mechBfDays, globalLastMechEndDay);
+          for (let i = 0; i < model.mechSampleCount; i++) {
+            const bin = mechBins[i];
+            const segments = [];
+            if (mechBfDays > 0) {
+              segments.push({
+                label: CATEGORY_COLORS[CategoryType.FUNCTION]?.label || 'Basic Func',
+                days: mechBfDays,
+                bg: CATEGORY_COLORS[CategoryType.FUNCTION]?.bg || 'bg-sky-100',
+                text: CATEGORY_COLORS[CategoryType.FUNCTION]?.text || 'text-sky-600',
+                forceStartDay: baseStartDay
+              });
+            }
+
+            let startDelay = equipmentStartDay - (baseStartDay + mechBfDays);
+            if (startDelay > 0 && bin.segments.length > 0) {
+              segments.push({
+                label: '等候機台',
+                days: startDelay,
+                bg: 'bg-transparent border-t border-b border-dashed border-slate-300',
+                text: 'text-slate-400 italic',
+                isWait: true
+              });
+            }
+
+            segments.push(...bin.segments);
+
+            const row = {
+              id: `dut_mech_${model.id}_${rowCounter}`,
+              label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+              track: 'B',
+              trackLabel: 'S&V',
+              startDay: baseStartDay,
+              segments: segments,
+              totalDays: mechBfDays + (bin.segments.length > 0 ? (startDelay + bin.totalDays) : 0),
+            };
+            mechRows.push(row);
+            modelDuts.push(row);
+            rowCounter++;
+            equipmentStartDay += bin.totalDays;
+          }
+          globalLastMechEndDay = equipmentStartDay;
+        } else {
+          // 並聯模式：一台樣品只執行一種應用的 S&V
+          // 相同應用跨型號共用設備（並行），不同應用依序（設備一次只能設定一種條件）
+          for (let i = 0; i < model.mechSampleCount; i++) {
+            const bin = mechBins[i];
+            const stdData = activeMechStds[i % activeMechStds.length];
+            const appId = stdData?.standardId || '';
+
+            // 分配全局設備時間槽：首次遇到的應用取得下一個可用槽位
+            if (appId && mechParallelSlots[appId] === undefined) {
+              mechParallelSlots[appId] = mechParallelNextSlot;
+              mechParallelNextSlot += bin.totalDays;
+            }
+
+            const slotOffset = appId ? (mechParallelSlots[appId] || 0) : 0;
+
+            const segments: Seg[] = [];
+            // BF 基本功能測試
+            if (mechBfDays > 0) {
+              segments.push({
+                label: CATEGORY_COLORS[CategoryType.FUNCTION]?.label || 'Basic Func',
+                days: mechBfDays,
+                bg: CATEGORY_COLORS[CategoryType.FUNCTION]?.bg || 'bg-sky-100',
+                text: CATEGORY_COLORS[CategoryType.FUNCTION]?.text || 'text-sky-600',
+              });
+            }
+            // 等候機台：不同應用需等候設備切換條件
+            if (slotOffset > 0 && bin.segments.length > 0) {
+              segments.push({
+                label: '等候機台',
+                days: slotOffset,
+                bg: 'bg-transparent border-t border-b border-dashed border-slate-300',
+                text: 'text-slate-400 italic',
+                isWait: true
+              });
+            }
+            segments.push(...bin.segments);
+
+            const row = {
+              id: `dut_mech_${model.id}_${rowCounter}`,
+              label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+              track: 'B',
+              trackLabel: 'S&V',
+              startDay: baseStartDay,
+              segments,
+              totalDays: mechBfDays + (bin.segments.length > 0 ? (slotOffset + bin.totalDays) : 0),
+            };
+            mechRows.push(row);
+            modelDuts.push(row);
+            rowCounter++;
+          }
         }
       }
 
-      // 4. 智慧負載平衡 (Smart Routing)
-      
-      // 高空 (Altitude) -> 找目前 ENV Rows 中最短的，接在後面
+      // 4. 智慧負載平衡
       if (altitudeSegments.length > 0) {
         if (envRows.length > 0) {
           envRows.sort((a, b) => a.totalDays - b.totalDays);
-          const targetRow = envRows[0];
-          targetRow.segments.push(...altitudeSegments);
-          targetRow.totalDays += altitudeDays;
+          envRows[0].segments.push(...altitudeSegments);
+          envRows[0].totalDays += altitudeDays;
         } else {
           modelDuts.push({
             id: `dut_alt_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
@@ -427,25 +592,20 @@ const App: React.FC = () => {
           rowCounter++;
         }
       }
-
-      // Connector -> 找目前 ENV 或 MECH 中最短的，接在後面
       if (connectorSegments.length > 0) {
         const candidates = [...envRows, ...mechRows];
         if (candidates.length > 0) {
           candidates.sort((a, b) => a.totalDays - b.totalDays);
-          const targetRow = candidates[0];
-          targetRow.segments.push(...connectorSegments);
-          targetRow.totalDays += connectorDays;
+          candidates[0].segments.push(...connectorSegments);
+          candidates[0].totalDays += connectorDays;
         } else {
           modelDuts.push({
-            id: `dut_conn_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+            id: `dut_conn_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '00')} - ${model.name}`,
             track: 'A', trackLabel: 'Connector', startDay: baseStartDay, segments: [...appendEnvBF(), ...connectorSegments], totalDays: envBfDays + connectorDays,
           });
           rowCounter++;
         }
       }
-
-      // IP / Other -> 找目前 ENV 或 MECH 中最短的，或獨立
       if (ipOtherSegments.length > 0) {
         if (singleSampleStrategy === SingleSampleStrategy.INDEPENDENT) {
           modelDuts.push({
@@ -457,9 +617,8 @@ const App: React.FC = () => {
           const candidates = [...envRows, ...mechRows];
           if (candidates.length > 0) {
             candidates.sort((a, b) => a.totalDays - b.totalDays);
-            const targetRow = candidates[0];
-            targetRow.segments.push(...ipOtherSegments);
-            targetRow.totalDays += ipOtherDays;
+            candidates[0].segments.push(...ipOtherSegments);
+            candidates[0].totalDays += ipOtherDays;
           } else {
             modelDuts.push({
               id: `dut_ip_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
@@ -470,78 +629,103 @@ const App: React.FC = () => {
         }
       }
 
-      // 5. 產生 Track C (PKG) - NEW LOGIC using PkgSampleStrategy logic reversed to 'Parallel' or 'Serial'
-      if (pkgSegments.length > 0 || pkgBfDays > 0) {
-        // pkgStrategy is now treated as ExecutionStrategy (Independent = PARALLEL, Reuse = SERIAL to match UI)
-        const isPkgParallel = pkgStrategy === PkgSampleStrategy.INDEPENDENT; // We'll rename labels in UI, Independent maps to Parallel
-        
-        for (let i = 0; i < model.pkgSampleCount; i++) {
-            // Find completion time of corresponding Track A sample for the drop test
-            const sourceEnvRow = envRows[i % Math.max(1, envRows.length)];
-            const envDuration = sourceEnvRow ? sourceEnvRow.totalDays : 0;
-            
-            const prepSegments: Seg[] = [{ label: CATEGORY_COLORS.prep.label, days: 14, bg: CATEGORY_COLORS.prep.bg, text: CATEGORY_COLORS.prep.text }];
-            
-            if (isPkgParallel) {
-                // Parallel: Start Day 0: [Prep] + [PKG BF] + [Wait...] + [PKG Drop/Vib]
-                const activePrepDays = 14 + pkgBfDays;
-                let waitSegments: Seg[] = [];
-                let waitDays = 0;
-                
-                if (envDuration > activePrepDays) {
-                    waitDays = envDuration - activePrepDays;
-                    waitSegments = [{ label: '等候環境完測', days: waitDays, bg: 'bg-transparent border-t border-b border-dashed border-slate-300', text: 'text-slate-400 italic', isWait: true }];
-                }
-                
-                modelDuts.push({
-                  id: `dut_pkg_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
-                  track: 'C', trackLabel: 'PKG', startDay: baseStartDay, 
-                  segments: [...prepSegments, ...appendPkgBF(), ...waitSegments, ...pkgSegments], 
-                  totalDays: activePrepDays + waitDays + pkgDays,
-                });
-            } else {
-                // Serial: Start after Env is totally done. Wait(Env) + [Prep] + [PKG BF] + [PKG]
-                let waitSegments: Seg[] = [];
-                if (envDuration > 0) {
-                    waitSegments = [{ label: '等候環境完測', days: envDuration, bg: 'bg-transparent border-t border-b border-dashed border-slate-300', text: 'text-slate-400 italic', isWait: true }];
-                }
-                modelDuts.push({
-                  id: `dut_pkg_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
-                  track: 'C', trackLabel: 'PKG', startDay: baseStartDay, 
-                  segments: [...waitSegments, ...prepSegments, ...appendPkgBF(), ...pkgSegments], 
-                  totalDays: envDuration + 14 + pkgBfDays + pkgDays,
-                });
-            }
-            rowCounter++;
-        }
+      // 5. Track C (PKG) - 暫存，等待所有 ENV 算完後在最終階段再同步對齊
+      if (model.pkgSampleCount > 0 && (pkgSegments.length > 0 || pkgBfDays > 0)) {
+        const prepSegments: Seg[] = [{ label: CATEGORY_COLORS.prep.label, days: 14, bg: CATEGORY_COLORS.prep.bg, text: CATEGORY_COLORS.prep.text }];
+        allPkgTasks.push({
+          model,
+          baseStartDay,
+          envRows,
+          pkgSampleCount: model.pkgSampleCount,
+          prepSegments,
+          pkgBfDays,
+          pkgSegments,
+          pkgDays,
+          rowCounterOffset: rowCounter
+        });
+        rowCounter += model.pkgSampleCount;
       }
 
       // --- 結算 Model 的時間與數量 ---
       let maxA = 0, maxB = 0, maxC = 0, maxD = 0;
       modelDuts.forEach(d => {
-        if (d.track === 'A') maxA = Math.max(maxA, d.totalDays);
-        if (d.track === 'B') maxB = Math.max(maxB, d.totalDays);
-        if (d.track === 'C') maxC = Math.max(maxC, d.totalDays);
-        if (d.track === 'D') maxD = Math.max(maxD, d.totalDays);
+        // d.totalDays 只是該「長條」的寬度。要算出實際佔用的「最後一天」，必須以 (d.startDay - baseStartDay + d.totalDays) 來結算該 Model 的總耗時
+        const relativeEndDay = (d.startDay - baseStartDay) + d.totalDays;
+
+        if (d.track === 'A') maxA = Math.max(maxA, relativeEndDay);
+        if (d.track === 'B') maxB = Math.max(maxB, relativeEndDay);
+        if (d.track === 'C') maxC = Math.max(maxC, relativeEndDay);
+        if (d.track === 'D') maxD = Math.max(maxD, relativeEndDay);
       });
 
-      // Update global tracking
       if (strategy === ExecutionStrategy.SERIAL) {
-        const shiftAmount = globalTrackATotal;
-        modelDuts.forEach(d => d.startDay += shiftAmount);
+        // modelDuts.startDay is ALREADY correctly set to baseStartDay = globalTrackATotal
         globalTrackATotal += Math.max(maxA, maxB, maxC, maxD);
       } else {
         globalTrackATotal = Math.max(globalTrackATotal, maxA);
         globalTrackBTotal = Math.max(globalTrackBTotal, maxB);
         globalTrackCTotal = Math.max(globalTrackCTotal, maxC);
-        globalTrackATotal = Math.max(globalTrackATotal, maxD); // Independent IP tracked in A's timespan
+        globalTrackATotal = Math.max(globalTrackATotal, maxD);
       }
 
-      // NEW logic: Exclude PKG samples from total tracking (they are boxes/materials, do not consume physical machine unit counts)
       const modelTotalUnits = model.envSampleCount + model.mechSampleCount + (ipOtherSegments.length > 0 && singleSampleStrategy === SingleSampleStrategy.INDEPENDENT ? 1 : 0);
       globalTotalUnits += modelTotalUnits;
 
       allDutRows.push(...modelDuts);
+    });
+
+    // --- 全局同步處理 PKG Start ---
+    const appendGlobalPkgBF = (pkgBfDays: number) => pkgBfDays > 0 ? [{ label: 'PKG Basic Func', days: pkgBfDays, bg: 'bg-sky-100', text: 'text-sky-600' }] : [];
+    let globalMaxEnvEndDay = 0;
+    allDutRows.filter(r => r.track === 'A' || r.track === 'C' || r.track === 'D').forEach(r => {
+      globalMaxEnvEndDay = Math.max(globalMaxEnvEndDay, r.startDay + r.totalDays);
+    });
+
+    allPkgTasks.forEach(task => {
+      const activePrepDays = 14 + task.pkgBfDays;
+      let rCounter = task.rowCounterOffset;
+      if (pkgStrategy === PkgSampleStrategy.INDEPENDENT) {
+        // 獨立樣品：全部統一在此時間 (globalMaxEnvEndDay) 同步啟動前置作業
+        for (let i = 0; i < task.pkgSampleCount; i++) {
+          let offset = globalMaxEnvEndDay - task.baseStartDay;
+          if (offset < 0) offset = 0;
+          let waitSegments: Seg[] = [];
+          if (offset > 0) {
+            waitSegments.push({ label: '等候對齊', days: offset, bg: 'bg-transparent border-t border-b border-dashed border-slate-300', text: 'text-slate-400 italic', isWait: true });
+          }
+          const row = {
+            id: `dut_pkg_${task.model.id}_${rCounter}`, label: `DUT ${String(rCounter).padStart(2, '0')} - ${task.model.name}`,
+            track: 'C' as any, trackLabel: 'PKG', startDay: task.baseStartDay,
+            segments: [...waitSegments, ...task.prepSegments, ...appendGlobalPkgBF(task.pkgBfDays), ...task.pkgSegments],
+            totalDays: offset + activePrepDays + task.pkgDays,
+          };
+          allDutRows.push(row);
+
+          // Re-calculate max C for total duration
+          globalTrackCTotal = Math.max(globalTrackCTotal, row.startDay + row.totalDays);
+          rCounter++;
+        }
+      } else {
+        // 消耗樣品：全部附加到 env 陣列尾端，並使用 gap 確保統一在此刻同步啟動前置作業
+        const pkgAppendSegs = [...task.prepSegments, ...appendGlobalPkgBF(task.pkgBfDays), ...task.pkgSegments];
+        const pkgAppendDays = 14 + task.pkgBfDays + task.pkgDays;
+        for (let i = 0; i < task.pkgSampleCount; i++) {
+          const targetRow = task.envRows[i % Math.max(1, task.envRows.length)];
+          if (targetRow) {
+            const absoluteEnd = targetRow.startDay + targetRow.totalDays;
+            const gapDays = globalMaxEnvEndDay - absoluteEnd;
+            if (gapDays > 0) {
+              targetRow.segments.push({ label: '等候對齊', days: gapDays, bg: 'bg-transparent border-t border-b border-dashed border-slate-300', text: 'text-slate-400 italic', isWait: true });
+              targetRow.totalDays += gapDays;
+            }
+            targetRow.segments.push(...pkgAppendSegs);
+            targetRow.totalDays += pkgAppendDays;
+
+            // Re-calculate max A/C after appending
+            if (targetRow.track === 'A') globalTrackATotal = Math.max(globalTrackATotal, targetRow.startDay + targetRow.totalDays);
+          }
+        }
+      }
     });
 
     if (strategy === ExecutionStrategy.SERIAL) {
@@ -658,11 +842,11 @@ const App: React.FC = () => {
                 <div className="space-y-1.5 max-h-[40vh] xl:max-h-[50vh] overflow-y-auto pr-1 flex-1">
                   {calculationResults.dutRows.map(dut => (
                     <div key={dut.id} className="flex items-center gap-2">
-                      <div className="w-auto min-w-[6rem] shrink-0 flex items-center gap-1.5">
-                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${TRACK_LABEL_COLORS[dut.track]}`}>
+                      <div className="w-48 lg:w-56 shrink-0 flex items-center justify-between gap-1.5 pr-2">
+                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded text-center shrink-0 w-12 ${TRACK_LABEL_COLORS[dut.track]}`}>
                           {dut.trackLabel}
                         </span>
-                        <span className="text-[10px] font-bold text-slate-500 tabular-nums whitespace-nowrap">{dut.label}</span>
+                        <span className="text-[10px] font-bold text-slate-500 tabular-nums flex-1 text-right truncate pl-2" title={dut.label}>{dut.label}</span>
                       </div>
                       <div className="flex-1 h-7 bg-slate-50 rounded-lg relative overflow-hidden border border-slate-100">
                         <div
@@ -692,8 +876,14 @@ const App: React.FC = () => {
                   ))}
                 </div>
 
-                {/* 圖例 */}
+                {/* 圖例 — 各標準固定色 + 特殊類別色 */}
                 <div className="flex flex-wrap gap-x-4 gap-y-1 justify-center pt-2 border-t border-slate-100">
+                  {Object.entries(STANDARD_FIXED_COLORS).map(([key, config]) => (
+                    <div key={key} className="flex items-center gap-1.5">
+                      <div className={`w-3 h-3 rounded-sm ${config.bg} shadow-sm`}></div>
+                      <span className="text-[8px] text-slate-400 font-medium">{config.label}</span>
+                    </div>
+                  ))}
                   {Object.entries(CATEGORY_COLORS).map(([key, config]) => (
                     <div key={key} className="flex items-center gap-1.5">
                       <div className={`w-3 h-3 rounded-sm ${config.bg} shadow-sm`}></div>
@@ -769,7 +959,7 @@ const App: React.FC = () => {
                 ))}
                 <button
                   onClick={() => {
-                    const newModel = createDefaultModel(standards, 'moxa', `New Model ${models.length + 1}`);
+                    const newModel = createDefaultModel(standards, ['moxa'], `New Model ${models.length + 1}`);
                     setModels([...models, newModel]);
                     setActiveModelId(newModel.id);
                   }}
@@ -874,7 +1064,7 @@ const App: React.FC = () => {
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">樣品數量需求分配</label>
                       <div className="space-y-2">
                         <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                          <span className="text-[10px] font-bold text-slate-400">Track A 樣品數量</span>
+                          <span className="text-[10px] font-bold text-slate-400">Chamber 樣品數量</span>
                           <div className="flex items-center gap-3">
                             <button onClick={() => updateActiveModel({ envSampleCount: Math.max(1, activeModel.envSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
                             <span className="w-4 text-center font-bold tabular-nums">{activeModel.envSampleCount}</span>
@@ -883,7 +1073,7 @@ const App: React.FC = () => {
                         </div>
 
                         <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
-                          <span className="text-[10px] font-bold text-slate-400">Track B 樣品數量</span>
+                          <span className="text-[10px] font-bold text-slate-400">S&V 樣品數量</span>
                           <div className="flex items-center gap-3">
                             <button onClick={() => updateActiveModel({ mechSampleCount: Math.max(0, activeModel.mechSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
                             <span className="w-4 text-center font-bold tabular-nums">{activeModel.mechSampleCount}</span>
@@ -920,8 +1110,28 @@ const App: React.FC = () => {
                         </button>
                       </div>
                       {activeModel.envSampleCount < 2 && storageStrategy === ExecutionStrategy.PARALLEL && (
-                        <p className="text-[9px] text-amber-400 mt-1">⚠ Track A 樣品需 ≥ 2 才可啟用並聯</p>
+                        <p className="text-[9px] text-amber-400 mt-1">⚠ Chamber 樣品需 ≥ 2 才可啟用並聯</p>
                       )}
+                    </div>
+
+                    {/* S&V Strategy */}
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">S&V 執行策略</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => updateActiveModel({ mechStrategy: ExecutionStrategy.SERIAL })}
+                          className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${activeModel.mechStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                        >
+                          串聯模式
+                        </button>
+                        <button
+                          onClick={() => updateActiveModel({ mechStrategy: ExecutionStrategy.PARALLEL })}
+                          className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${activeModel.mechStrategy === ExecutionStrategy.PARALLEL || !activeModel.mechStrategy ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                        >
+                          並行模式
+                        </button>
+                      </div>
+                      <p className="text-[9px] text-slate-500 mt-1">💡 因設備大小限制，大型樣品可能需選擇「串聯模式」接續執行</p>
                     </div>
 
 
@@ -1060,6 +1270,15 @@ const App: React.FC = () => {
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={() => setStorageStrategy(ExecutionStrategy.SERIAL)} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${storageStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>串聯模式</button>
                 <button onClick={() => activeModel.envSampleCount >= 2 && setStorageStrategy(ExecutionStrategy.PARALLEL)} disabled={activeModel.envSampleCount < 2} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${storageStrategy === ExecutionStrategy.PARALLEL && activeModel.envSampleCount >= 2 ? 'bg-indigo-600 text-white' : activeModel.envSampleCount < 2 ? 'bg-white/10 text-slate-600 cursor-not-allowed opacity-50' : 'bg-white/10 text-slate-400'}`}>並行模式</button>
+              </div>
+            </div>
+
+            {/* S&V 策略 */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">S&V 執行策略</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => updateActiveModel({ mechStrategy: ExecutionStrategy.SERIAL })} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${activeModel.mechStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>串聯模式</button>
+                <button onClick={() => updateActiveModel({ mechStrategy: ExecutionStrategy.PARALLEL })} className={`py-3 rounded-xl text-[10px] font-bold transition-all ${activeModel.mechStrategy === ExecutionStrategy.PARALLEL || !activeModel.mechStrategy ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-400'}`}>並行模式</button>
               </div>
             </div>
 
