@@ -87,7 +87,7 @@ const createDefaultModel = (standards: StandardData[], initialStandardIds: strin
 
 // 各標準固定顏色（側欄圖示、甘特圖分段、圖例共用，確保全應用一致性）
 const STANDARD_FIXED_COLORS: Record<string, { bg: string, text: string, label: string }> = {
-  moxa: { bg: 'bg-indigo-500', text: 'text-white', label: 'Moxa' },
+  moxa: { bg: 'bg-indigo-600', text: 'text-white', label: 'Moxa' },
   railway: { bg: 'bg-amber-500', text: 'text-white', label: 'Railway' },
   marine: { bg: 'bg-cyan-500', text: 'text-white', label: 'Marine' },
   power: { bg: 'bg-emerald-500', text: 'text-white', label: 'Power' },
@@ -95,7 +95,7 @@ const STANDARD_FIXED_COLORS: Record<string, { bg: string, text: string, label: s
 
 // 側欄圖示色（與 STANDARD_FIXED_COLORS 一致）
 const APP_COLORS: Record<string, string> = {
-  moxa: 'bg-indigo-500',
+  moxa: 'bg-indigo-600',
   railway: 'bg-amber-500',
   marine: 'bg-cyan-500',
   power: 'bg-emerald-500',
@@ -106,17 +106,18 @@ const APP_COLORS: Record<string, string> = {
 
 // DUT 甘特圖 - 特殊類別配色（BF、Storage、PKG 等非標準色）
 const CATEGORY_COLORS: Record<string, { bg: string, text: string, label: string }> = {
-  [CategoryType.FUNCTION]: { bg: 'bg-cyan-500', text: 'text-white', label: 'BF' },
-  storage: { bg: 'bg-amber-500', text: 'text-white', label: 'Storage' },
-  pkg: { bg: 'bg-slate-800', text: 'text-white', label: 'PKG' },
+  [CategoryType.FUNCTION]: { bg: 'bg-sky-400', text: 'text-white', label: 'BF' },
+  storage: { bg: 'bg-purple-500', text: 'text-white', label: 'Storage' },
+  pkg: { bg: 'bg-slate-700', text: 'text-white', label: 'PKG' },
   prep: { bg: 'bg-slate-200', text: 'text-slate-500', label: '前置作業' },
 };
 
 // DUT Track 標籤配色
 const TRACK_LABEL_COLORS: Record<string, string> = {
-  A: 'bg-indigo-100 text-indigo-700',
-  B: 'bg-orange-100 text-orange-700',
-  C: 'bg-slate-200 text-slate-700',
+  A: 'bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200',
+  B: 'bg-orange-50 text-orange-600 ring-1 ring-orange-200',
+  C: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
+  D: 'bg-sky-50 text-sky-600 ring-1 ring-sky-200',
 };
 
 const App: React.FC = () => {
@@ -842,11 +843,11 @@ const App: React.FC = () => {
                 <div className="space-y-1.5 max-h-[40vh] xl:max-h-[50vh] overflow-y-auto pr-1 flex-1">
                   {calculationResults.dutRows.map(dut => (
                     <div key={dut.id} className="flex items-center gap-2">
-                      <div className="w-48 lg:w-56 shrink-0 flex items-center justify-between gap-1.5 pr-2">
-                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded text-center shrink-0 w-12 ${TRACK_LABEL_COLORS[dut.track]}`}>
+                      <div className="w-48 lg:w-56 shrink-0 flex items-center justify-start gap-2 pr-2">
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded text-center shrink-0 w-[4.5rem] ${TRACK_LABEL_COLORS[dut.track]}`}>
                           {dut.trackLabel}
                         </span>
-                        <span className="text-[10px] font-bold text-slate-500 tabular-nums flex-1 text-right truncate pl-2" title={dut.label}>{dut.label}</span>
+                        <span className="text-[10px] font-bold text-slate-600 tabular-nums flex-1 text-left truncate pl-1" title={dut.label}>{dut.label}</span>
                       </div>
                       <div className="flex-1 h-7 bg-slate-50 rounded-lg relative overflow-hidden border border-slate-100">
                         <div
