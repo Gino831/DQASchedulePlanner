@@ -312,8 +312,7 @@ const App: React.FC = () => {
       let totalStorageDays = 0;
       const altitudeSegments: Seg[] = [];
       let altitudeDays = 0;
-      const connectorSegments: Seg[] = [];
-      let connectorDays = 0;
+
       const ipOtherSegments: Seg[] = [];
       let ipOtherDays = 0;
       const mechSegments: Seg[] = [];
@@ -339,7 +338,7 @@ const App: React.FC = () => {
         let stdEnvDays = 0;
         let stdStorageDays = 0;
         let stdAltDays = 0;
-        let stdConnDays = 0;
+
         let stdIpDays = 0;
         let stdMechDays = 0;
         let stdPkgDays = 0;
@@ -353,7 +352,7 @@ const App: React.FC = () => {
               const isStorage = nameLower.includes('storage');
               const isAltitude = nameLower.includes('altitude') || item.name.includes('高空');
               const isBF = nameLower.includes('basic function') || item.name.includes('基本功能');
-              const isConnector = (nameLower.includes('connector') || item.name.includes('插拔') || nameLower.includes('durability')) && !isAltitude && !isStorage && !isPkg && !isBF;
+
               const isIpOtherCategory = [CategoryType.DUST_TEST, CategoryType.WATER_TEST, CategoryType.OTHER].includes(catType);
 
               if (isPkg && isBF) {
@@ -368,8 +367,6 @@ const App: React.FC = () => {
                 stdStorageDays += item.duration;
               } else if (isAltitude) {
                 stdAltDays += item.duration;
-              } else if (isConnector) {
-                stdConnDays += item.duration;
               } else if (isIpOtherCategory) {
                 stdIpDays += item.duration;
               } else if ([CategoryType.CHAMBER].includes(catType)) {
@@ -396,11 +393,7 @@ const App: React.FC = () => {
           altitudeSegments.push({ label: stdTag + '✈️ 高空', days: stdAltDays, bg: 'bg-amber-100 border-amber-300', text: 'text-amber-800 font-bold' });
           altitudeDays += stdAltDays;
         }
-        if (stdConnDays > 0) {
-          const c = getColor();
-          connectorSegments.push({ label: stdTag + '插拔', days: stdConnDays, bg: c.bg, text: c.text });
-          connectorDays += stdConnDays;
-        }
+
         if (stdIpDays > 0) {
           const c = getColor();
           ipOtherSegments.push({ label: stdTag + 'IP/Other', days: stdIpDays, bg: c.bg, text: c.text });
@@ -602,20 +595,7 @@ const App: React.FC = () => {
           rowCounter++;
         }
       }
-      if (connectorSegments.length > 0) {
-        const candidates = [...envRows, ...mechRows];
-        if (candidates.length > 0) {
-          candidates.sort((a, b) => a.totalDays - b.totalDays);
-          candidates[0].segments.push(...connectorSegments);
-          candidates[0].totalDays += connectorDays;
-        } else {
-          modelDuts.push({
-            id: `dut_conn_${model.id}_${rowCounter}`, label: `DUT ${String(rowCounter).padStart(2, '00')} - ${model.name}`,
-            track: 'A', trackLabel: 'Connector', startDay: baseStartDay, segments: [...appendEnvBF(), ...connectorSegments], totalDays: envBfDays + connectorDays,
-          });
-          rowCounter++;
-        }
-      }
+
       if (ipOtherSegments.length > 0) {
         if (singleSampleStrategy === SingleSampleStrategy.INDEPENDENT) {
           modelDuts.push({
