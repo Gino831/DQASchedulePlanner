@@ -447,16 +447,20 @@ const App: React.FC = () => {
       let rowCounter = 1;
       const baseStartDay = strategy === ExecutionStrategy.SERIAL ? globalTrackATotal : 0;
 
-      const storageIsParallel = storageStrategy === ExecutionStrategy.PARALLEL && totalStorageDays > 0 && model.envSampleCount >= 2;
-      const envDutCount = storageIsParallel ? (model.envSampleCount - 1) : model.envSampleCount;
+      // Storage 策略：每型號固定 1 台 Storage 樣品
+      // 串聯：延續第一台 Chamber 樣品（附加到 envRow[0]），不額外增加
+      // 並聯：增加 1 台獨立的 Storage 樣品
+      const storageIsParallel = storageStrategy === ExecutionStrategy.PARALLEL && totalStorageDays > 0;
+      const envDutCount = model.envSampleCount;
 
       // 1. Track A (ENV) — 合併所有標準的 Chamber 段落在同一 DUT 行
       const envRows: any[] = [];
-      if (envDutCount > 0 && (envBaseSegments.length > 0 || envBfDays > 0 || (storageSegments.length > 0 && !storageIsParallel))) {
+      if (envDutCount > 0 && (envBaseSegments.length > 0 || envBfDays > 0)) {
         for (let i = 0; i < envDutCount; i++) {
           const segs = [...appendEnvBF(), ...envBaseSegments];
           let days = envBfDays + envBaseDays;
-          if (!storageIsParallel && storageSegments.length > 0) {
+          // 串聯模式：僅第一台 Chamber 樣品延續 Storage 測試
+          if (!storageIsParallel && storageSegments.length > 0 && i === 0) {
             segs.push(...storageSegments);
             days += totalStorageDays;
           }
@@ -470,7 +474,7 @@ const App: React.FC = () => {
         }
       }
 
-      // 2. Storage 獨立
+      // 2. Storage 獨立（並聯模式）：增加 1 台獨立 Storage 樣品
       if (storageIsParallel) {
         const segs = [...appendEnvBF(), ...storageSegments];
         const sDays = envBfDays + totalStorageDays;
