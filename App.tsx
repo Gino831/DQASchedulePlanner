@@ -678,7 +678,8 @@ const App: React.FC = () => {
         globalTrackATotal = Math.max(globalTrackATotal, maxD);
       }
 
-      const modelTotalUnits = model.envSampleCount + model.mechSampleCount + (ipOtherSegments.length > 0 && singleSampleStrategy === SingleSampleStrategy.INDEPENDENT ? 1 : 0);
+      const pkgExtraUnits = (pkgStrategy === PkgSampleStrategy.INDEPENDENT && model.pkgSampleCount > 0 && (pkgSegments.length > 0 || pkgBfDays > 0)) ? model.pkgSampleCount : 0;
+      const modelTotalUnits = model.envSampleCount + model.mechSampleCount + pkgExtraUnits + (ipOtherSegments.length > 0 && singleSampleStrategy === SingleSampleStrategy.INDEPENDENT ? 1 : 0);
       globalTotalUnits += modelTotalUnits;
 
       allDutRows.push(...modelDuts);
