@@ -9,7 +9,7 @@ import {
   ModelEntry,
   SingleSampleStrategy,
 } from './types';
-import { STANDARDS_DATA as INITIAL_DATA, loadStandardsFromRemote } from './constants';
+import { STANDARDS_DATA as INITIAL_DATA, loadStandardsFromRemote, mergeLocalWithRemote } from './constants';
 
 // 根據應用程式設定預設勾選的測項
 // Moxa: 按照使用者需求設定特定測項
@@ -124,10 +124,17 @@ const App: React.FC = () => {
   const [dataSource, setDataSource] = useState<'loading' | 'remote' | 'local'>('loading');
   const [standards, setStandards] = useState<StandardData[]>(INITIAL_DATA);
 
-  // App 啟動時從 GitHub 動態載入最新測項資料
+  // App 啟動時從 GitHub 動態載入最新測項資料，並與本地自訂資料合併
   useEffect(() => {
     loadStandardsFromRemote().then(({ data, source }) => {
-      setStandards(data);
+      // 取得之前保存在本地的使用者自訂資料（新增或修改的測項）
+      const savedLocal = localStorage.getItem('dqa_planner_v13');
+      const localData = savedLocal ? JSON.parse(savedLocal) : [];
+
+      // 將本地自訂資料（為優先）與遠端最新資料進行深度合併
+      const mergedData = mergeLocalWithRemote(data, localData);
+
+      setStandards(mergedData);
       setDataSource(source);
     });
   }, []);
@@ -183,8 +190,12 @@ const App: React.FC = () => {
   };
 
 
-  // 測項資料現在從遠端載入，不再需要存入 localStorage
-  // （保留 setStandards 以支援未來的 UI 內編輯功能）
+  // 儲存最新的 standards 到 localStorage，以保留使用者的自訂編輯
+  useEffect(() => {
+    if (dataSource !== 'loading' && standards.length > 0) {
+      localStorage.setItem('dqa_planner_v13', JSON.stringify(standards));
+    }
+  }, [standards, dataSource]);
 
   const toggleApp = (appId: string) => {
     const current = activeModel.standardIds || [];

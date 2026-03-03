@@ -168,6 +168,56 @@ const FALLBACK_STANDARDS: StandardData[] = parseRawStandards([
 // 預設匯出（離線 fallback）
 export const STANDARDS_DATA: StandardData[] = FALLBACK_STANDARDS;
 
+// 深度合併遠端與本地資料：以遠端版為底，補上本地自訂的新增或修改
+export const mergeLocalWithRemote = (remote: StandardData[], local: StandardData[]): StandardData[] => {
+  if (!local || local.length === 0) return remote;
+
+  const merged = [...remote];
+
+  local.forEach(localStd => {
+    const remoteStdIdx = merged.findIndex(rs => rs.id === localStd.id);
+    if (remoteStdIdx === -1) {
+      // 1. 本地新增的完整標準（例如使用者點了「新增領域」）
+      merged.push(localStd);
+    } else {
+      // 2. 合併標準內的類別與測項
+      const remoteStd = { ...merged[remoteStdIdx] };
+      const remoteCategories = { ...remoteStd.categories } as any;
+      const localCategories = (localStd.categories || {}) as any;
+
+      Object.entries(localCategories).forEach(([catKey, localItems]) => {
+        const cat = catKey as CategoryType;
+        if (!remoteCategories[cat]) {
+          // 本地新增了某個新類別的所有項目
+          remoteCategories[cat] = [...(localItems as any[])];
+        } else {
+          const rItems = [...(remoteCategories[cat] as any[])];
+          (localItems as any[]).forEach(lItem => {
+            const rItemIdx = rItems.findIndex(ri => ri.id === lItem.id);
+            if (rItemIdx === -1) {
+              // 本地新增的測項
+              rItems.push(lItem);
+            } else {
+              // 本地修改過的測項（如修改名稱、天數等）
+              rItems[rItemIdx] = { ...rItems[rItemIdx], ...lItem };
+            }
+          });
+          remoteCategories[cat] = rItems;
+        }
+      });
+
+      // 保留本地對於該標準名稱/圖示的修改
+      remoteStd.name = localStd.name || remoteStd.name;
+      remoteStd.icon = localStd.icon || remoteStd.icon;
+      remoteStd.categories = remoteCategories;
+
+      merged[remoteStdIdx] = remoteStd;
+    }
+  });
+
+  return merged;
+};
+
 // 從 GitHub 動態載入最新測項資料
 // 成功時回傳遠端資料，失敗時回傳內建 fallback
 export const loadStandardsFromRemote = async (): Promise<{
