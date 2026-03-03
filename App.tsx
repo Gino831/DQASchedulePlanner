@@ -9,7 +9,7 @@ import {
   ModelEntry,
   SingleSampleStrategy,
 } from './types';
-import { STANDARDS_DATA as INITIAL_DATA } from './constants';
+import { STANDARDS_DATA as INITIAL_DATA, loadStandardsFromRemote } from './constants';
 
 // 根據應用程式設定預設勾選的測項
 // Moxa: 按照使用者需求設定特定測項
@@ -120,10 +120,17 @@ const TRACK_LABEL_COLORS: Record<string, string> = {
 };
 
 const App: React.FC = () => {
-  const [standards, setStandards] = useState<StandardData[]>(() => {
-    const saved = localStorage.getItem('dqa_planner_v13');
-    return saved ? JSON.parse(saved) : INITIAL_DATA;
-  });
+  // 資料來源：'loading' = 載入中, 'remote' = 從 GitHub 取得, 'local' = 使用內建預設
+  const [dataSource, setDataSource] = useState<'loading' | 'remote' | 'local'>('loading');
+  const [standards, setStandards] = useState<StandardData[]>(INITIAL_DATA);
+
+  // App 啟動時從 GitHub 動態載入最新測項資料
+  useEffect(() => {
+    loadStandardsFromRemote().then(({ data, source }) => {
+      setStandards(data);
+      setDataSource(source);
+    });
+  }, []);
 
   const [models, setModels] = useState<ModelEntry[]>(() => {
     const saved = localStorage.getItem('dqa_planner_v14_models');
@@ -176,9 +183,8 @@ const App: React.FC = () => {
   };
 
 
-  useEffect(() => {
-    localStorage.setItem('dqa_planner_v13', JSON.stringify(standards));
-  }, [standards]);
+  // 測項資料現在從遠端載入，不再需要存入 localStorage
+  // （保留 setStandards 以支援未來的 UI 內編輯功能）
 
   const toggleApp = (appId: string) => {
     const current = activeModel.standardIds || [];
@@ -769,6 +775,10 @@ const App: React.FC = () => {
         <div className="p-6 border-b border-slate-100 bg-slate-50/50">
           <h1 className="text-xl font-bold tracking-tight text-slate-900">DQA Planner</h1>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Industrial Standards</p>
+          <div className={`text-[9px] mt-1.5 flex items-center gap-1 ${dataSource === 'remote' ? 'text-emerald-500' : dataSource === 'loading' ? 'text-amber-400' : 'text-slate-400'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${dataSource === 'remote' ? 'bg-emerald-400' : dataSource === 'loading' ? 'bg-amber-400 animate-pulse' : 'bg-slate-300'}`}></span>
+            {dataSource === 'remote' ? '✓ 已從 GitHub 載入最新測項' : dataSource === 'loading' ? '載入中...' : '使用內建預設資料'}
+          </div>
         </div>
 
         <div className="p-4 space-y-2">
