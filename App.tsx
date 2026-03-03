@@ -735,7 +735,9 @@ const App: React.FC = () => {
 
     if (sortBy === 'track') {
       allDutRows.sort((a, b) => {
-        if (a.track !== b.track) return a.track.localeCompare(b.track);
+        // 先按測試類別名稱 (ENV, Storage, S&V) 排列，確保同測試群聚
+        if (a.trackLabel !== b.trackLabel) return String(a.trackLabel).localeCompare(String(b.trackLabel));
+        // 同測試類別再依型號及 DUT 編號排列
         return a.label.localeCompare(b.label);
       });
     } else {
