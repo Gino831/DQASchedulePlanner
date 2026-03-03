@@ -696,12 +696,13 @@ const App: React.FC = () => {
       let rCounter = task.rowCounterOffset;
       if (pkgStrategy === PkgSampleStrategy.INDEPENDENT) {
         // 獨立樣品（並行）：有額外獨立機台，不需等待其他機台對齊，可直接開始
+        // 且因為是獨立機台，不需重新整理，所以不需要 14 天前置作業
         for (let i = 0; i < task.pkgSampleCount; i++) {
           const row = {
             id: `dut_pkg_${task.model.id}_${rCounter}`, label: `DUT ${String(rCounter).padStart(2, '0')} - ${task.model.name}`,
             track: 'C' as any, trackLabel: 'PKG', startDay: task.baseStartDay,
-            segments: [...task.prepSegments, ...appendGlobalPkgBF(task.pkgBfDays), ...task.pkgSegments],
-            totalDays: activePrepDays + task.pkgDays,
+            segments: [...appendGlobalPkgBF(task.pkgBfDays), ...task.pkgSegments],
+            totalDays: task.pkgBfDays + task.pkgDays,
           };
           allDutRows.push(row);
 
