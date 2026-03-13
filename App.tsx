@@ -1,5 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { db } from './firebase';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import {
   CategoryType,
   TestItem,
@@ -121,23 +123,50 @@ const TRACK_LABEL_COLORS: Record<string, string> = {
 };
 
 const App: React.FC = () => {
-  // 資料來源：'loading' = 載入中, 'remote' = 從 GitHub 取得, 'local' = 使用內建預設
+  // 資料來源：'loading' = 載入中, 'remote' = 從 Firebase 取得, 'local' = 使用內建預設
   const [dataSource, setDataSource] = useState<'loading' | 'remote' | 'local'>('loading');
   const [standards, setStandards] = useState<StandardData[]>(INITIAL_DATA);
 
-  // App 啟動時從 GitHub 動態載入最新測項資料，並與本地自訂資料合併
+  // App 啟動時監聽 Firebase
   useEffect(() => {
-    loadStandardsFromRemote().then(({ data, source }) => {
-      // 取得之前保存在本地的使用者自訂資料（新增或修改的測項）
-      const savedLocal = localStorage.getItem('dqa_planner_v13');
-      const localData = savedLocal ? JSON.parse(savedLocal) : [];
+    const docRef = doc(db, 'config', 'standards');
+    setSyncStatus('連線中...');
+    const unsubscribe = onSnapshot(docRef, { includeMetadataChanges: true }, async (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data().data;
+        if (data && Array.isArray(data)) {
+          setStandards(data);
+          setDataSource('remote');
+          if (docSnap.metadata.hasPendingWrites) {
+            setSyncStatus('儲存中 (等待連線同步...)');
+          } else {
+            setSyncStatus('已連線 (即時同步中)');
+          }
+          return;
+        }
+      }
 
-      // 將本地自訂資料（為優先）與遠端最新資料進行深度合併
-      const mergedData = mergeLocalWithRemote(data, localData);
+      // 如果 Firebase 裡面沒有資料，或資料格式不對，作為種子資料寫入 Firebase (只利用本地和預設資料)
+      try {
+        const savedLocal = localStorage.getItem('dqa_planner_v13');
+        const localData = savedLocal ? JSON.parse(savedLocal) : [];
+        const mergedData = mergeLocalWithRemote(INITIAL_DATA, localData);
 
-      setStandards(mergedData);
-      setDataSource(source);
+        await setDoc(docRef, { data: mergedData });
+        setStandards(mergedData);
+        setDataSource('local');
+      } catch (err) {
+        setStandards(INITIAL_DATA);
+        setDataSource('local');
+        setSyncStatus('備份還原失敗 (載入預設資料)');
+      }
+    }, (error) => {
+      console.error("[Firebase] Error listening to config:", error);
+      setDataSource('local');
+      setSyncStatus(`監聽連線失敗: ${error.message}`);
     });
+
+    return () => unsubscribe();
   }, []);
 
   const [models, setModels] = useState<ModelEntry[]>(() => {
@@ -191,12 +220,12 @@ const App: React.FC = () => {
   };
 
 
-  // 儲存最新的 standards 到 localStorage，以保留使用者的自訂編輯
+  // 儲存最新的 standards 到 localStorage，以保留使用者的本地備份，避免離線時完全沒資料
   useEffect(() => {
-    if (dataSource !== 'loading' && standards.length > 0) {
+    if (standards.length > 0) {
       localStorage.setItem('dqa_planner_v13', JSON.stringify(standards));
     }
-  }, [standards, dataSource]);
+  }, [standards]);
 
   const toggleApp = (appId: string) => {
     const current = activeModel.standardIds || [];
@@ -237,44 +266,77 @@ const App: React.FC = () => {
     updateActiveModel({ selectedTests: currentSelection });
   };
 
+  const [syncStatus, setSyncStatus] = useState<string>('');
+
   const deleteTestItem = (e: React.MouseEvent, standardId: string, category: CategoryType, itemId: string) => {
     e.preventDefault();
     e.stopPropagation();
     if (!window.confirm('確定要永久刪除此測試項目嗎？')) return;
-    setStandards(prev => prev.map(s => {
+
+    // 計算新的 standards 陣列
+    const newStandards = standards.map(s => {
       if (s.id !== standardId) return s;
       const updatedCats = { ...s.categories };
       if (updatedCats[category]) {
         updatedCats[category] = updatedCats[category]!.filter(i => i.id !== itemId);
       }
       return { ...s, categories: updatedCats };
-    }));
+    });
+
+    // Optimistic UI update
+    setStandards(newStandards);
     setModels(prev => prev.map(m => {
       if (!m.standardIds?.includes(standardId)) return m;
       const updatedTests = { ...m.selectedTests };
       delete updatedTests[itemId];
       return { ...m, selectedTests: updatedTests };
     }));
+
+    // 儲存到 Firebase (不使用 await 阻擋 UI)
+    setSyncStatus('同步刪除中...');
+    setDoc(doc(db, 'config', 'standards'), { data: newStandards }).then(() => {
+      setSyncStatus('已連線 (即時同步中)');
+    }).catch(err => {
+      console.error("Failed to delete test item:", err);
+      setSyncStatus(`刪除同步失敗: ${err.message}`);
+      // 如果真的失敗，可以考慮在這裡 rollback state 或者提示使用者
+      console.warn("[Firebase] 背景同步刪除失敗，但畫面已更新。");
+    });
   };
 
   const saveStandard = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStandard) return;
     const { isNew, data } = editingStandard;
+
+    let newStandards;
     if (isNew) {
       const newId = `app_${Date.now()}`;
-      setStandards([...standards, { id: newId, name: data.name || '新領域', description: '', icon: data.icon || 'bolt', categories: {} }]);
+      newStandards = [...standards, { id: newId, name: data.name || '新領域', description: '', icon: data.icon || 'bolt', categories: {} }];
     } else {
-      setStandards(standards.map(s => s.id === data.id ? { ...s, ...data } : s));
+      newStandards = standards.map(s => s.id === data.id ? { ...s, ...data } : s);
     }
+
+    // Optimistic UI update
+    setStandards(newStandards);
     setEditingStandard(null);
+
+    // 儲存到 Firebase (不使用 await 阻擋 UI)
+    setSyncStatus('同步儲存中...');
+    setDoc(doc(db, 'config', 'standards'), { data: newStandards }).then(() => {
+      setSyncStatus('已連線 (即時同步中)');
+    }).catch(err => {
+      console.error("Failed to save standard:", err);
+      setSyncStatus(`類別同步失敗: ${err.message}`);
+    });
   };
 
   const saveTestItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTest) return;
     const { standardId, isNew, data } = editingTest;
-    setStandards(prev => prev.map(s => {
+
+    const newStandards = standards.map(s => {
       if (s.id !== standardId) return s;
       const cat = (data.category as CategoryType) || CategoryType.CHAMBER;
       const currentItems = s.categories[cat] || [];
@@ -285,8 +347,20 @@ const App: React.FC = () => {
         newCategories[cat] = currentItems.map(i => i.id === data.id ? { ...i, ...data } : i);
       }
       return { ...s, categories: newCategories };
-    }));
+    });
+
+    // Optimistic UI update
+    setStandards(newStandards);
     setEditingTest(null);
+
+    // 儲存到 Firebase (不使用 await 阻擋 UI)
+    setSyncStatus('同步儲存中...');
+    setDoc(doc(db, 'config', 'standards'), { data: newStandards }).then(() => {
+      setSyncStatus('已連線 (即時同步中)');
+    }).catch(err => {
+      console.error("Failed to save test item:", err);
+      setSyncStatus(`測項同步失敗: ${err.message}`);
+    });
   };
 
   const calculationResults = useMemo(() => {
@@ -306,7 +380,7 @@ const App: React.FC = () => {
 
     type Seg = { label: string; days: number; bg: string; text: string; isWait?: boolean };
     const allDutRows: Array<{
-      id: string; label: string; track: 'A' | 'B' | 'C' | 'D'; trackLabel: string;
+      id: string; modelId?: string; label: string; track: 'A' | 'B' | 'C' | 'D'; trackLabel: string;
       startDay: number; segments: Seg[]; totalDays: number;
     }> = [];
 
@@ -672,7 +746,8 @@ const App: React.FC = () => {
       }
 
       const pkgExtraUnits = (pkgStrategy === PkgSampleStrategy.INDEPENDENT && model.pkgSampleCount > 0 && (pkgSegments.length > 0 || pkgBfDays > 0)) ? model.pkgSampleCount : 0;
-      const modelTotalUnits = model.envSampleCount + model.mechSampleCount + pkgExtraUnits + (ipOtherSegments.length > 0 && singleSampleStrategy === SingleSampleStrategy.INDEPENDENT ? 1 : 0);
+      const storageExtraUnits = storageIsParallel ? 1 : 0;
+      const modelTotalUnits = model.envSampleCount + model.mechSampleCount + pkgExtraUnits + storageExtraUnits + (ipOtherSegments.length > 0 && singleSampleStrategy === SingleSampleStrategy.INDEPENDENT ? 1 : 0);
       globalTotalUnits += modelTotalUnits;
 
       allDutRows.push(...modelDuts);
@@ -766,11 +841,13 @@ const App: React.FC = () => {
       {/* Sidebar - Compact Selection */}
       <aside className="w-full md:w-72 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-y-auto no-print md:sticky md:top-0 md:h-screen">
         <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">DQA Planner</h1>
+          <div className="flex justify-between items-center">
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">DQA Planner</h1>
+          </div>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Industrial Standards</p>
-          <div className={`text-[9px] mt-1.5 flex items-center gap-1 ${dataSource === 'remote' ? 'text-emerald-500' : dataSource === 'loading' ? 'text-amber-400' : 'text-slate-400'}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${dataSource === 'remote' ? 'bg-emerald-400' : dataSource === 'loading' ? 'bg-amber-400 animate-pulse' : 'bg-slate-300'}`}></span>
-            {dataSource === 'remote' ? '✓ 已從 GitHub 載入最新測項' : dataSource === 'loading' ? '載入中...' : '使用內建預設資料'}
+          <div className={`text-[9px] mt-1.5 flex items-center gap-1 ${syncStatus.includes('失敗') ? 'text-red-500 font-bold' : syncStatus.includes('等待') ? 'text-amber-500 font-bold' : dataSource === 'remote' ? 'text-emerald-500' : dataSource === 'loading' ? 'text-amber-400' : 'text-slate-400'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${syncStatus.includes('失敗') ? 'bg-red-500 animate-pulse' : syncStatus.includes('等待') ? 'bg-amber-500 animate-pulse' : dataSource === 'remote' ? 'bg-emerald-400' : dataSource === 'loading' ? 'bg-amber-400 animate-pulse' : 'bg-slate-300'}`}></span>
+            {syncStatus || (dataSource === 'remote' ? '已連線至 Firebase' : dataSource === 'loading' ? '載入中...' : '使用內建預設資料')}
           </div>
         </div>
 
@@ -1354,9 +1431,9 @@ const App: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setEditingTest(null)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-200">取消</button>
-                <button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-lg hover:bg-slate-800 transition-all">儲存測項</button>
+              <div className="flex justify-end gap-3 mt-8">
+                <button type="button" onClick={() => setEditingTest(null)} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">取消</button>
+                <button type="submit" className="px-5 py-2.5 text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors shadow-sm">儲存</button>
               </div>
             </form>
           </div>
@@ -1386,9 +1463,9 @@ const App: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setEditingStandard(null)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-200">取消</button>
-                <button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-lg hover:bg-slate-800 transition-all">更新類別</button>
+              <div className="flex justify-end gap-3 mt-8">
+                <button type="button" onClick={() => setEditingStandard(null)} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">取消</button>
+                <button type="submit" className="px-5 py-2.5 text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors shadow-sm">儲存</button>
               </div>
             </form>
           </div>
