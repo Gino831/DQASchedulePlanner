@@ -46,6 +46,16 @@
                     "id": "m_c8",
                     "name": "Altitude test",
                     "duration": 2
+                },
+                {
+                    "id": "m_c9",
+                    "name": "RF Performance Test (Chamber前)",
+                    "duration": 3
+                },
+                {
+                    "id": "m_c10",
+                    "name": "RF Performance Test (Chamber後)",
+                    "duration": 3
                 }
             ],
             "振動衝擊應用": [
