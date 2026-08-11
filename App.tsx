@@ -109,12 +109,16 @@ const APP_COLORS: Record<string, string> = {
 };
 
 // DUT 甘特圖 - 特殊類別配色（BF、Storage、PKG 等非標準色）
+// 外測送件前的 Basic Function 準備天數
+const OUTSOURCE_PREP_DAYS = 2;
+
 const CATEGORY_COLORS: Record<string, { bg: string, text: string, label: string }> = {
   [CategoryType.FUNCTION]: { bg: 'bg-sky-400', text: 'text-white', label: 'BF' },
   storage: { bg: 'bg-purple-500', text: 'text-white', label: 'Storage' },
   pkg: { bg: 'bg-slate-700', text: 'text-white', label: 'PKG' },
   prep: { bg: 'bg-slate-200', text: 'text-slate-500', label: '前置作業' },
   rf: { bg: 'bg-teal-500', text: 'text-white', label: 'RF' },
+  outsourced: { bg: 'bg-amber-500', text: 'text-white', label: '外測' },
 };
 
 // DUT Track 標籤配色
@@ -495,6 +499,9 @@ const App: React.FC = () => {
       let totalStorageDays = 0;
       const altitudeSegments: Seg[] = [];
       let altitudeDays = 0;
+      // 外測：獨立成段接在 S&V 之後，每項前面加 2 天 Basic Function 準備時間
+      const outsourcedSegments: Seg[] = [];
+      let outsourcedDays = 0;
 
       const ipOtherSegments: Seg[] = [];
       let ipOtherDays = 0;
@@ -532,7 +539,17 @@ const App: React.FC = () => {
           const catType = cat as CategoryType;
           (items as any[] | undefined)?.forEach(item => {
             if (selectedMap[item.id]) {
-              // 外測項目照常計入工期（送外部實驗室仍佔用時程），另在 outsourcedCost 統計費用
+              // 外測：不併入任何既有類別，改為獨立成段（BF 2 天前置 + 測項本身），
+              // 於下方接在 S&V 之後。仍計入工期，費用另於 outsourcedCost 統計。
+              if (item.outsourced) {
+                const bfColor = CATEGORY_COLORS[CategoryType.FUNCTION];
+                outsourcedSegments.push(
+                  { label: 'BF 前置', days: OUTSOURCE_PREP_DAYS, bg: bfColor.bg, text: bfColor.text },
+                  { label: stdTag + item.name, days: item.duration, bg: 'bg-amber-500', text: 'text-white' }
+                );
+                outsourcedDays += OUTSOURCE_PREP_DAYS + item.duration;
+                return;
+              }
               const nameLower = item.name.toLowerCase();
               const isPkg = nameLower.includes('pkg') || nameLower.includes('包裝');
               const isStorage = nameLower.includes('storage');
@@ -653,6 +670,7 @@ const App: React.FC = () => {
       const ipDutCount = Math.max(1, model.ipSampleCount ?? 1);
       // 串聯但無 S&V 樣品可接續時，會退回配置 1 台獨立樣品
       let ipFallbackUnits = 0;
+      let outsourcedFallbackUnits = 0;
 
       // 1. Track A (ENV) — 合併所有標準的 Chamber 段落在同一 DUT 行
       const envRows: any[] = [];
@@ -837,6 +855,23 @@ const App: React.FC = () => {
         }
       }
 
+      // 外測：接在 S&V 之後（每項已自帶 BF 2 天前置）
+      if (outsourcedSegments.length > 0) {
+        if (mechRows.length > 0) {
+          const target = [...mechRows].sort((a, b) => a.totalDays - b.totalDays)[0];
+          target.segments.push(...outsourcedSegments);
+          target.totalDays += outsourcedDays;
+        } else {
+          // 沒有 S&V 樣品可接續時，獨立成列，否則外測項目會從甘特圖消失
+          modelDuts.push({
+            id: `dut_out_${model.id}_${rowCounter}`, modelId: model.id, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+            track: 'B', trackLabel: '外測', startDay: baseStartDay, segments: [...outsourcedSegments], totalDays: outsourcedDays,
+          });
+          rowCounter++;
+          outsourcedFallbackUnits = 1;
+        }
+      }
+
       // 5. Track C (PKG) - 暫存，等待所有 ENV 算完後在最終階段再同步對齊
       if (model.pkgSampleCount > 0 && (pkgSegments.length > 0 || pkgBfDays > 0)) {
         const prepSegments: Seg[] = [{ label: CATEGORY_COLORS.prep.label, days: 14, bg: CATEGORY_COLORS.prep.bg, text: CATEGORY_COLORS.prep.text }];
@@ -880,7 +915,7 @@ const App: React.FC = () => {
       const storageExtraUnits = storageIsParallel ? 1 : 0;
       // IP 並聯才額外消耗樣品；串聯沿用 S&V 樣品（無 S&V 可接時退回 1 台）
       const ipExtraUnits = ipOtherSegments.length > 0 ? (ipIsParallel ? ipDutCount : ipFallbackUnits) : 0;
-      const modelTotalUnits = model.envSampleCount + model.mechSampleCount + pkgExtraUnits + storageExtraUnits + ipExtraUnits;
+      const modelTotalUnits = model.envSampleCount + model.mechSampleCount + pkgExtraUnits + storageExtraUnits + ipExtraUnits + outsourcedFallbackUnits;
       globalTotalUnits += modelTotalUnits;
 
       allDutRows.push(...modelDuts);
