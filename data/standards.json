@@ -305,11 +305,6 @@
                     "id": "mr45_v1",
                     "name": "Vibration (Sine Vib)",
                     "duration": 2
-                },
-                {
-                    "id": "mr45_v2",
-                    "name": "Wideband random",
-                    "duration": 1
                 }
             ]
         }
