@@ -223,7 +223,7 @@
     {
         "id": "marine",
         "name": "Marine DNVGL/IEC 60945/E10",
-        "description": "船舶設備 (DNVGL/E10)",
+        "description": "船舶設備 (DNVGL／IEC 60945／E10)",
         "icon": "anchor",
         "categories": {
             "Chamber 應用": [
@@ -280,7 +280,7 @@
     {
         "id": "marine_60945",
         "name": "Marine IEC 60945",
-        "description": "船舶設備 (IEC 60945)",
+        "description": "船舶設備 (IEC 60945，2026 版：Dry Heat／Damp heat／Low temperature)",
         "icon": "anchor",
         "categories": {
             "Chamber 應用": [
