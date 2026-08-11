@@ -43,7 +43,9 @@ export interface ModelEntry {
   envSampleCount: number;
   mechSampleCount: number;
   pkgSampleCount: number;
+  ipSampleCount: number; // IP/防塵防水/鹽霧 樣品數量（僅並聯模式有作用）
   mechStrategy?: ExecutionStrategy; // S&V 執行策略
+  ipStrategy?: ExecutionStrategy; // IP 執行策略：並聯=獨立樣品(前置 BF)、串聯=接在 S&V 之後
 }
 
 export enum SingleSampleStrategy {

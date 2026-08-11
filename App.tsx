@@ -1,7 +1,8 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { db } from './firebase';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+
 import {
   CategoryType,
   TestItem,
@@ -9,9 +10,8 @@ import {
   ExecutionStrategy,
   PkgSampleStrategy,
   ModelEntry,
-  SingleSampleStrategy,
 } from './types';
-import { STANDARDS_DATA as INITIAL_DATA, loadStandardsFromRemote, mergeLocalWithRemote } from './constants';
+import { STANDARDS_DATA as INITIAL_DATA, loadStandardsFromRemote, mergeLocalWithRemote, LAB_TA_PASSCODE } from './constants';
 
 // 根據應用程式設定預設勾選的測項
 // Moxa: 按照使用者需求設定特定測項
@@ -83,7 +83,9 @@ const createDefaultModel = (standards: StandardData[], initialStandardIds: strin
     envSampleCount: 1,
     mechSampleCount: 1,
     pkgSampleCount: 1,
-    mechStrategy: ExecutionStrategy.PARALLEL
+    ipSampleCount: 1,
+    mechStrategy: ExecutionStrategy.PARALLEL,
+    ipStrategy: ExecutionStrategy.SERIAL
   };
 };
 
@@ -112,6 +114,7 @@ const CATEGORY_COLORS: Record<string, { bg: string, text: string, label: string 
   storage: { bg: 'bg-purple-500', text: 'text-white', label: 'Storage' },
   pkg: { bg: 'bg-slate-700', text: 'text-white', label: 'PKG' },
   prep: { bg: 'bg-slate-200', text: 'text-slate-500', label: '前置作業' },
+  rf: { bg: 'bg-teal-500', text: 'text-white', label: 'RF' },
 };
 
 // DUT Track 標籤配色
@@ -123,50 +126,130 @@ const TRACK_LABEL_COLORS: Record<string, string> = {
 };
 
 const App: React.FC = () => {
-  // 資料來源：'loading' = 載入中, 'remote' = 從 Firebase 取得, 'local' = 使用內建預設
+  // 資料來源：'loading' = 載入中, 'remote' = 從 GitHub 取得最新佈達版, 'local' = 使用內建預設
   const [dataSource, setDataSource] = useState<'loading' | 'remote' | 'local'>('loading');
   const [standards, setStandards] = useState<StandardData[]>(INITIAL_DATA);
+  // Lab TA 模式：解鎖後才能編輯測項天數（僅防誤改，非資安控管）
+  const [isLabTA, setIsLabTA] = useState<boolean>(() => sessionStorage.getItem('dqa_lab_ta') === '1');
+  const ganttRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
-  // App 啟動時監聽 Firebase
+  // Lab TA 解鎖／鎖定：僅防止一般使用者誤改天數，非資安控管
+  const unlockLabTA = () => {
+    const input = window.prompt('請輸入 Lab TA 解鎖碼：');
+    if (input === null) return;
+    if (input.trim() === LAB_TA_PASSCODE) {
+      sessionStorage.setItem('dqa_lab_ta', '1');
+      setIsLabTA(true);
+    } else {
+      alert('解鎖碼錯誤');
+    }
+  };
+
+  const lockLabTA = () => {
+    sessionStorage.removeItem('dqa_lab_ta');
+    setIsLabTA(false);
+  };
+
+  // 匯出佈達用的 standards.json（格式與 repo 的 data/standards.json 一致）
+  const exportStandardsJson = () => {
+    const payload = standards.map(s => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      icon: s.icon,
+      categories: Object.fromEntries(
+        Object.entries(s.categories).map(([cat, items]) => [
+          cat,
+          (items || []).map(({ id, name, duration }) => ({ id, name, duration })),
+        ])
+      ),
+    }));
+    const blob = new Blob([JSON.stringify(payload, null, 2) + '\n'], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'standards.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // 只擷取甘特圖區塊輸出成 PDF，不含側欄/測項清單/設定面板
+  // 作法：複製一份到畫面外並完整展開後才擷取，確保 html2canvas 的量測與繪製一致
+  // （直接擷取原節點會因捲動容器裁切、以及 truncate 的 overflow:hidden 造成文字被切半）
+  const EXPORT_SCALE = 3;
+  const handleExportPDF = async () => {
+    if (!ganttRef.current || isExporting) return;
+    setIsExporting(true);
+    const holder = document.createElement('div');
+    try {
+      const src = ganttRef.current;
+      holder.style.cssText = `position:fixed;left:-99999px;top:0;background:#ffffff;padding:24px;width:${src.offsetWidth}px;`;
+      const clone = src.cloneNode(true) as HTMLElement;
+      clone.style.height = 'auto';
+      // 移除純 UI 控制項（匯出鈕、排序切換）
+      clone.querySelectorAll('.no-print').forEach(el => el.remove());
+      // 展開 DUT 列捲動區域，避免多型號時被裁切
+      clone.querySelectorAll<HTMLElement>('[data-gantt-scroll]').forEach(el => {
+        el.style.maxHeight = 'none';
+        el.style.overflow = 'visible';
+      });
+      // 解除 truncate 的 overflow:hidden，否則 html2canvas 會把文字底部切掉
+      clone.querySelectorAll<HTMLElement>('.truncate').forEach(el => {
+        el.style.overflow = 'visible';
+        el.style.textOverflow = 'clip';
+        el.style.lineHeight = '1.7';
+      });
+      holder.appendChild(clone);
+      document.body.appendChild(holder);
+      await new Promise(requestAnimationFrame);
+
+      const canvas = await html2canvas(holder, {
+        scale: EXPORT_SCALE,
+        backgroundColor: '#ffffff',
+        width: holder.scrollWidth,
+        height: holder.scrollHeight,
+      });
+
+      // 頁面尺寸取 CSS 像素當 pt，使影像密度為 EXPORT_SCALE × 72 DPI（216 DPI）
+      const pageW = canvas.width / EXPORT_SCALE;
+      const pageH = canvas.height / EXPORT_SCALE;
+      const pdf = new jsPDF({
+        orientation: pageW > pageH ? 'landscape' : 'portrait',
+        unit: 'pt',
+        format: [pageW, pageH],
+      });
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pageW, pageH);
+      pdf.save(`DQA排程甘特圖_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (err) {
+      console.error('匯出 PDF 失敗', err);
+      alert('匯出 PDF 失敗，請稍後再試。');
+    } finally {
+      if (holder.parentNode) document.body.removeChild(holder);
+      setIsExporting(false);
+    }
+  };
+
+  // App 啟動時從 GitHub 載入 Lab TA 佈達的最新測項資料
+  // 天數以佈達版為準；本地只保留使用者自訂的測項/類別（見 mergeLocalWithRemote）
   useEffect(() => {
-    const docRef = doc(db, 'config', 'standards');
-    setSyncStatus('連線中...');
-    const unsubscribe = onSnapshot(docRef, { includeMetadataChanges: true }, async (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data().data;
-        if (data && Array.isArray(data)) {
-          setStandards(data);
-          setDataSource('remote');
-          if (docSnap.metadata.hasPendingWrites) {
-            setSyncStatus('儲存中 (等待連線同步...)');
-          } else {
-            setSyncStatus('已連線 (即時同步中)');
-          }
-          return;
-        }
-      }
-
-      // 如果 Firebase 裡面沒有資料，或資料格式不對，作為種子資料寫入 Firebase (只利用本地和預設資料)
+    let cancelled = false;
+    setSyncStatus('載入測項資料中...');
+    loadStandardsFromRemote().then(({ data, source }) => {
+      if (cancelled) return;
+      let merged = data;
       try {
         const savedLocal = localStorage.getItem('dqa_planner_v13');
         const localData = savedLocal ? JSON.parse(savedLocal) : [];
-        const mergedData = mergeLocalWithRemote(INITIAL_DATA, localData);
-
-        await setDoc(docRef, { data: mergedData });
-        setStandards(mergedData);
-        setDataSource('local');
+        merged = mergeLocalWithRemote(data, localData, isLabTA);
       } catch (err) {
-        setStandards(INITIAL_DATA);
-        setDataSource('local');
-        setSyncStatus('備份還原失敗 (載入預設資料)');
+        console.warn('[DQA] 本地備份解析失敗，改用佈達版資料', err);
       }
-    }, (error) => {
-      console.error("[Firebase] Error listening to config:", error);
-      setDataSource('local');
-      setSyncStatus(`監聽連線失敗: ${error.message}`);
+      setStandards(merged);
+      setDataSource(source);
+      setSyncStatus(source === 'remote' ? '已載入最新佈達版測項' : '離線：使用內建預設測項');
     });
-
-    return () => unsubscribe();
+    return () => { cancelled = true; };
   }, []);
 
   const [models, setModels] = useState<ModelEntry[]>(() => {
@@ -179,6 +262,9 @@ const App: React.FC = () => {
             ...m,
             standardIds: m.standardIds || (m.standardId ? [m.standardId] : ['moxa']),
             mechStrategy: m.mechStrategy || ExecutionStrategy.PARALLEL,
+            // 舊版資料無 IP 欄位，補預設值（串聯＝沿用既有 S&V 樣品，與舊行為最接近）
+            ipSampleCount: m.ipSampleCount ?? 1,
+            ipStrategy: m.ipStrategy || ExecutionStrategy.SERIAL,
           }));
         }
       } catch (e) {
@@ -195,7 +281,6 @@ const App: React.FC = () => {
   const [strategy, setStrategy] = useState<ExecutionStrategy>(ExecutionStrategy.PARALLEL);
   const [storageStrategy, setStorageStrategy] = useState<ExecutionStrategy>(ExecutionStrategy.PARALLEL);
   const [pkgStrategy, setPkgStrategy] = useState<PkgSampleStrategy>(PkgSampleStrategy.REUSE);
-  const [singleSampleStrategy, setSingleSampleStrategy] = useState<SingleSampleStrategy>(SingleSampleStrategy.AUTO);
 
   const [editingStandard, setEditingStandard] = useState<{ isNew: boolean, data: Partial<StandardData> } | null>(null);
   const [editingTest, setEditingTest] = useState<{ standardId: string, isNew: boolean, data: Partial<TestItem> } | null>(null);
@@ -215,8 +300,19 @@ const App: React.FC = () => {
   const activeModel = models.find(m => m.id === activeModelId) || models[0];
   const activeApps = activeModel.standardIds || [];
 
-  const updateActiveModel = (updates: Partial<ModelEntry>) => {
-    setModels(prev => prev.map(m => m.id === activeModelId ? { ...m, ...updates } : m));
+  // 兩種呼叫方式：直接給 patch，或給 updater 從「上一版 model」推導 patch。
+  // 需要讀舊值的操作（selectedTests、standardIds）一律用 updater，否則同一批
+  // React 更新中的第二次呼叫會用過期的 render closure 覆蓋掉第一次的結果。
+  // updater 回傳 null 代表放棄這次更新。
+  const updateActiveModel = (
+    updates: Partial<ModelEntry> | ((prev: ModelEntry) => Partial<ModelEntry> | null)
+  ) => {
+    setModels(prev => prev.map(m => {
+      if (m.id !== activeModelId) return m;
+      const patch = typeof updates === 'function' ? updates(m) : updates;
+      if (!patch) return m;
+      return { ...m, ...patch };
+    }));
   };
 
 
@@ -228,42 +324,46 @@ const App: React.FC = () => {
   }, [standards]);
 
   const toggleApp = (appId: string) => {
-    const current = activeModel.standardIds || [];
-    if (current.includes(appId)) {
-      // 取消選取：移除該標準 ID
-      const updated = current.filter(id => id !== appId);
-      if (updated.length === 0) return;
-      updateActiveModel({ standardIds: updated } as any);
-    } else {
+    const allDefaults = getDefaultSelectedTests(standards);
+    updateActiveModel(prev => {
+      const current = prev.standardIds || [];
+      if (current.includes(appId)) {
+        // 取消選取：移除該標準 ID
+        const updated = current.filter(id => id !== appId);
+        if (updated.length === 0) return null;
+        return { standardIds: updated } as any;
+      }
       // 新增選取：合併預設勾選測項（不取消已勾選項目）
-      const updated = [...current, appId];
-      const allDefaults = getDefaultSelectedTests(standards);
       const newDefaults = allDefaults[appId] || {};
-      const mergedTests = { ...activeModel.selectedTests };
+      const mergedTests = { ...prev.selectedTests };
       Object.entries(newDefaults).forEach(([key, val]) => {
         if (val) mergedTests[key] = true; // 只新增，不覆蓋
       });
-      updateActiveModel({ standardIds: updated, selectedTests: mergedTests } as any);
-    }
+      return { standardIds: [...current, appId], selectedTests: mergedTests } as any;
+    });
   };
 
   const toggleTest = (standardId: string, itemId: string) => {
-    if (!activeModel.standardIds?.includes(standardId)) return;
-    const currentSelection = activeModel.selectedTests || {};
-    updateActiveModel({
-      selectedTests: { ...currentSelection, [itemId]: !currentSelection[itemId] }
+    updateActiveModel(prev => {
+      if (!prev.standardIds?.includes(standardId)) return null;
+      const currentSelection = prev.selectedTests || {};
+      return {
+        selectedTests: { ...currentSelection, [itemId]: !currentSelection[itemId] }
+      };
     });
   };
 
   const toggleAllInStandard = (standard: StandardData, select: boolean) => {
-    if (!activeModel.standardIds?.includes(standard.id)) return;
-    const currentSelection = { ...(activeModel.selectedTests || {}) };
-    Object.values(standard.categories).forEach(items => {
-      items?.forEach(item => {
-        currentSelection[item.id] = select;
+    updateActiveModel(prev => {
+      if (!prev.standardIds?.includes(standard.id)) return null;
+      const currentSelection = { ...(prev.selectedTests || {}) };
+      Object.values(standard.categories).forEach(items => {
+        items?.forEach(item => {
+          currentSelection[item.id] = select;
+        });
       });
+      return { selectedTests: currentSelection };
     });
-    updateActiveModel({ selectedTests: currentSelection });
   };
 
   const [syncStatus, setSyncStatus] = useState<string>('');
@@ -292,16 +392,7 @@ const App: React.FC = () => {
       return { ...m, selectedTests: updatedTests };
     }));
 
-    // 儲存到 Firebase (不使用 await 阻擋 UI)
-    setSyncStatus('同步刪除中...');
-    setDoc(doc(db, 'config', 'standards'), { data: newStandards }).then(() => {
-      setSyncStatus('已連線 (即時同步中)');
-    }).catch(err => {
-      console.error("Failed to delete test item:", err);
-      setSyncStatus(`刪除同步失敗: ${err.message}`);
-      // 如果真的失敗，可以考慮在這裡 rollback state 或者提示使用者
-      console.warn("[Firebase] 背景同步刪除失敗，但畫面已更新。");
-    });
+    // 僅存於本機（見 standards 的 localStorage useEffect），不再寫入雲端
   };
 
   const saveStandard = (e: React.FormEvent) => {
@@ -317,18 +408,9 @@ const App: React.FC = () => {
       newStandards = standards.map(s => s.id === data.id ? { ...s, ...data } : s);
     }
 
-    // Optimistic UI update
     setStandards(newStandards);
     setEditingStandard(null);
-
-    // 儲存到 Firebase (不使用 await 阻擋 UI)
-    setSyncStatus('同步儲存中...');
-    setDoc(doc(db, 'config', 'standards'), { data: newStandards }).then(() => {
-      setSyncStatus('已連線 (即時同步中)');
-    }).catch(err => {
-      console.error("Failed to save standard:", err);
-      setSyncStatus(`類別同步失敗: ${err.message}`);
-    });
+    // 僅存於本機，不再寫入雲端
   };
 
   const saveTestItem = (e: React.FormEvent) => {
@@ -344,23 +426,17 @@ const App: React.FC = () => {
       if (isNew) {
         newCategories[cat] = [...currentItems, { id: `t_${Date.now()}`, name: data.name || '新測項', duration: data.duration || 1, category: cat }];
       } else {
-        newCategories[cat] = currentItems.map(i => i.id === data.id ? { ...i, ...data } : i);
+        // 非 Lab TA 模式一律沿用原天數，避免繞過唯讀欄位改動基準值
+        newCategories[cat] = currentItems.map(i =>
+          i.id === data.id ? { ...i, ...data, duration: isLabTA ? (data.duration ?? i.duration) : i.duration } : i
+        );
       }
       return { ...s, categories: newCategories };
     });
 
-    // Optimistic UI update
     setStandards(newStandards);
     setEditingTest(null);
-
-    // 儲存到 Firebase (不使用 await 阻擋 UI)
-    setSyncStatus('同步儲存中...');
-    setDoc(doc(db, 'config', 'standards'), { data: newStandards }).then(() => {
-      setSyncStatus('已連線 (即時同步中)');
-    }).catch(err => {
-      console.error("Failed to save test item:", err);
-      setSyncStatus(`測項同步失敗: ${err.message}`);
-    });
+    // 僅存於本機，不再寫入雲端
   };
 
   const calculationResults = useMemo(() => {
@@ -394,6 +470,11 @@ const App: React.FC = () => {
       // 各測項分類 — 合併為每標準每類別一個段落，多選標準以不同顏色區分
       const envBaseSegments: Seg[] = [];
       let envBaseDays = 0;
+      // RF Performance Test 獨立呈現：RF前排在 Basic Function 之前，RF後接在 Chamber 之後
+      const rfPreSegments: Seg[] = [];
+      let rfPreDays = 0;
+      const rfPostSegments: Seg[] = [];
+      let rfPostDays = 0;
       const storageSegments: Seg[] = [];
       let totalStorageDays = 0;
       const altitudeSegments: Seg[] = [];
@@ -424,6 +505,8 @@ const App: React.FC = () => {
         let stdEnvDays = 0;
         let stdStorageDays = 0;
         let stdAltDays = 0;
+        let stdRfPreDays = 0;
+        let stdRfPostDays = 0;
 
         let stdIpDays = 0;
         let stdMechDays = 0;
@@ -440,8 +523,16 @@ const App: React.FC = () => {
               const isBF = nameLower.includes('basic function') || item.name.includes('基本功能');
 
               const isIpOtherCategory = [CategoryType.DUST_TEST, CategoryType.WATER_TEST, CategoryType.OTHER].includes(catType);
+              // RF Performance Test：以名稱區分 Chamber 前/後，於甘特圖獨立成段
+              const isRf = nameLower.includes('rf performance') || nameLower.includes('rf test');
+              const isRfPost = isRf && (item.name.includes('後') || nameLower.includes('post') || nameLower.includes('after'));
+              const isRfPre = isRf && !isRfPost;
 
-              if (isPkg && isBF) {
+              if (isRfPre) {
+                stdRfPreDays += item.duration;
+              } else if (isRfPost) {
+                stdRfPostDays += item.duration;
+              } else if (isPkg && isBF) {
                 pkgBfDays = Math.max(pkgBfDays, item.duration);
               } else if (isBF) {
                 if (catType === CategoryType.VIB_SHOCK) mechBfDays = Math.max(mechBfDays, item.duration);
@@ -469,6 +560,14 @@ const App: React.FC = () => {
           const c = getColor();
           envBaseSegments.push({ label: stdTag + 'Chamber', days: stdEnvDays, bg: c.bg, text: c.text });
           envBaseDays += stdEnvDays;
+        }
+        if (stdRfPreDays > 0) {
+          rfPreSegments.push({ label: stdTag + 'RF 前', days: stdRfPreDays, bg: CATEGORY_COLORS.rf.bg, text: CATEGORY_COLORS.rf.text });
+          rfPreDays += stdRfPreDays;
+        }
+        if (stdRfPostDays > 0) {
+          rfPostSegments.push({ label: stdTag + 'RF 後', days: stdRfPostDays, bg: CATEGORY_COLORS.rf.bg, text: CATEGORY_COLORS.rf.text });
+          rfPostDays += stdRfPostDays;
         }
         if (stdStorageDays > 0) {
           const c = getColor();
@@ -532,17 +631,27 @@ const App: React.FC = () => {
       const storageIsParallel = storageStrategy === ExecutionStrategy.PARALLEL && totalStorageDays > 0;
       const envDutCount = model.envSampleCount;
 
+      // IP 策略：並聯＝獨立樣品（依 ipSampleCount 配置），串聯＝接在 S&V 之後不增加樣品
+      const ipIsParallel = (model.ipStrategy || ExecutionStrategy.SERIAL) === ExecutionStrategy.PARALLEL;
+      const ipDutCount = Math.max(1, model.ipSampleCount ?? 1);
+      // 串聯但無 S&V 樣品可接續時，會退回配置 1 台獨立樣品
+      let ipFallbackUnits = 0;
+
       // 1. Track A (ENV) — 合併所有標準的 Chamber 段落在同一 DUT 行
       const envRows: any[] = [];
-      if (envDutCount > 0 && (envBaseSegments.length > 0 || envBfDays > 0)) {
+      if (envDutCount > 0 && (envBaseSegments.length > 0 || envBfDays > 0 || rfPreDays > 0 || rfPostDays > 0)) {
         for (let i = 0; i < envDutCount; i++) {
-          const segs = [...appendEnvBF(), ...envBaseSegments];
-          let days = envBfDays + envBaseDays;
+          // 順序：RF 前 → Basic Function → Chamber(含延續的 Storage) → RF 後
+          const segs = [...rfPreSegments, ...appendEnvBF(), ...envBaseSegments];
+          let days = rfPreDays + envBfDays + envBaseDays;
           // 串聯模式：僅第一台 Chamber 樣品延續 Storage 測試
           if (!storageIsParallel && storageSegments.length > 0 && i === 0) {
             segs.push(...storageSegments);
             days += totalStorageDays;
           }
+          // RF 後測試接在所有 Chamber 類測項完成之後
+          segs.push(...rfPostSegments);
+          days += rfPostDays;
           const row = {
             id: `dut_env_${model.id}_${rowCounter}`, modelId: model.id, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
             track: 'A', trackLabel: 'ENV', startDay: baseStartDay, segments: segs, totalDays: days,
@@ -683,26 +792,31 @@ const App: React.FC = () => {
         }
       }
 
+      // IP（防塵/防水/鹽霧）執行策略
+      // 並聯：配置 ipSampleCount 台獨立樣品，各自前置 Basic Function
+      // 串聯：接在 S&V 之後（沿用既有 S&V 樣品，不增加樣品數）
       if (ipOtherSegments.length > 0) {
-        if (singleSampleStrategy === SingleSampleStrategy.INDEPENDENT) {
+        if (ipIsParallel) {
+          for (let i = 0; i < ipDutCount; i++) {
+            modelDuts.push({
+              id: `dut_ip_${model.id}_${rowCounter}`, modelId: model.id, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+              track: 'D', trackLabel: 'IP/Misc', startDay: baseStartDay, segments: [...appendGeneralBF(), ...ipOtherSegments], totalDays: generalBfDays + ipOtherDays,
+            });
+            rowCounter++;
+          }
+        } else if (mechRows.length > 0) {
+          // 串聯：接在工期最短的 S&V 樣品之後，避免拉長關鍵路徑
+          const target = [...mechRows].sort((a, b) => a.totalDays - b.totalDays)[0];
+          target.segments.push(...ipOtherSegments);
+          target.totalDays += ipOtherDays;
+        } else {
+          // 沒有 S&V 樣品可接續時，退回獨立樣品（否則測項會憑空消失）
           modelDuts.push({
             id: `dut_ip_${model.id}_${rowCounter}`, modelId: model.id, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
             track: 'D', trackLabel: 'IP/Misc', startDay: baseStartDay, segments: [...appendGeneralBF(), ...ipOtherSegments], totalDays: generalBfDays + ipOtherDays,
           });
           rowCounter++;
-        } else {
-          const candidates = [...envRows, ...mechRows];
-          if (candidates.length > 0) {
-            candidates.sort((a, b) => a.totalDays - b.totalDays);
-            candidates[0].segments.push(...ipOtherSegments);
-            candidates[0].totalDays += ipOtherDays;
-          } else {
-            modelDuts.push({
-              id: `dut_ip_${model.id}_${rowCounter}`, modelId: model.id, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
-              track: 'A', trackLabel: 'IP/Misc', startDay: baseStartDay, segments: [...appendEnvBF(), ...ipOtherSegments], totalDays: envBfDays + ipOtherDays,
-            });
-            rowCounter++;
-          }
+          ipFallbackUnits = 1;
         }
       }
 
@@ -747,7 +861,9 @@ const App: React.FC = () => {
 
       const pkgExtraUnits = (pkgStrategy === PkgSampleStrategy.INDEPENDENT && model.pkgSampleCount > 0 && (pkgSegments.length > 0 || pkgBfDays > 0)) ? model.pkgSampleCount : 0;
       const storageExtraUnits = storageIsParallel ? 1 : 0;
-      const modelTotalUnits = model.envSampleCount + model.mechSampleCount + pkgExtraUnits + storageExtraUnits + (ipOtherSegments.length > 0 && singleSampleStrategy === SingleSampleStrategy.INDEPENDENT ? 1 : 0);
+      // IP 並聯才額外消耗樣品；串聯沿用 S&V 樣品（無 S&V 可接時退回 1 台）
+      const ipExtraUnits = ipOtherSegments.length > 0 ? (ipIsParallel ? ipDutCount : ipFallbackUnits) : 0;
+      const modelTotalUnits = model.envSampleCount + model.mechSampleCount + pkgExtraUnits + storageExtraUnits + ipExtraUnits;
       globalTotalUnits += modelTotalUnits;
 
       allDutRows.push(...modelDuts);
@@ -832,7 +948,7 @@ const App: React.FC = () => {
       currentStrategy: strategy,
       dutRows: allDutRows,
     };
-  }, [standards, models, strategy, storageStrategy, pkgStrategy, singleSampleStrategy, sortBy]);
+  }, [standards, models, strategy, storageStrategy, pkgStrategy, sortBy]);
 
 
   return (
@@ -847,7 +963,33 @@ const App: React.FC = () => {
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Industrial Standards</p>
           <div className={`text-[9px] mt-1.5 flex items-center gap-1 ${syncStatus.includes('失敗') ? 'text-red-500 font-bold' : syncStatus.includes('等待') ? 'text-amber-500 font-bold' : dataSource === 'remote' ? 'text-emerald-500' : dataSource === 'loading' ? 'text-amber-400' : 'text-slate-400'}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${syncStatus.includes('失敗') ? 'bg-red-500 animate-pulse' : syncStatus.includes('等待') ? 'bg-amber-500 animate-pulse' : dataSource === 'remote' ? 'bg-emerald-400' : dataSource === 'loading' ? 'bg-amber-400 animate-pulse' : 'bg-slate-300'}`}></span>
-            {syncStatus || (dataSource === 'remote' ? '已連線至 Firebase' : dataSource === 'loading' ? '載入中...' : '使用內建預設資料')}
+            {syncStatus || (dataSource === 'remote' ? '已載入最新佈達版測項' : dataSource === 'loading' ? '載入中...' : '使用內建預設資料')}
+          </div>
+
+          {/* Lab TA 模式：解鎖測項天數編輯 + 匯出佈達用 standards.json */}
+          <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
+            {isLabTA ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">🔓 Lab TA 模式</span>
+                  <button onClick={lockLabTA} className="text-[9px] font-bold text-slate-400 hover:text-slate-600">鎖定</button>
+                </div>
+                <button
+                  onClick={exportStandardsJson}
+                  className="w-full py-2 rounded-lg bg-slate-900 text-white text-[9px] font-bold uppercase tracking-wider hover:bg-slate-800 transition-colors"
+                >
+                  匯出 standards.json
+                </button>
+                <p className="text-[8px] text-slate-400 leading-relaxed">改完天數後匯出，交付 repo 的 data/standards.json 才算正式佈達</p>
+              </>
+            ) : (
+              <button
+                onClick={unlockLabTA}
+                className="w-full py-2 rounded-lg bg-slate-100 text-slate-500 text-[9px] font-bold uppercase tracking-wider hover:bg-slate-200 transition-colors"
+              >
+                🔒 Lab TA 解鎖
+              </button>
+            )}
           </div>
         </div>
 
@@ -885,17 +1027,18 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col min-w-0">
 
         {/* Gantt / Summary Header */}
-        <section className="bg-white border-b border-slate-200 p-6 lg:px-10 shrink-0 shadow-sm sticky top-0 z-30">
+        <section className="bg-white border-b border-slate-200 p-6 lg:px-10 shrink-0 shadow-sm sticky top-0 z-30 print:static print:shadow-none print:border-none">
+          <h2 className="hidden print:block text-sm font-bold text-slate-700 mb-4">DQA 測試時程評估報告</h2>
           {!calculationResults.hasTests ? (
             <div className="w-full text-center py-6 text-slate-300 font-medium italic">請選取測項開始評估</div>
           ) : (
-            <div className="w-full flex flex-col xl:flex-row items-stretch gap-6 xl:gap-10">
+            <div ref={ganttRef} className="w-full flex flex-col xl:flex-row items-stretch gap-6 xl:gap-10 bg-white">
               <div className="flex-1 w-full space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="h-2 w-2 rounded-full bg-indigo-500 shadow-sm animate-pulse"></div>
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">DUT Assignment Gantt</h3>
-                    <div className="flex ml-4 bg-slate-100 rounded-lg p-0.5">
+                    <div className="no-print flex ml-4 bg-slate-100 rounded-lg p-0.5">
                       <button
                         onClick={() => setSortBy('model')}
                         className={`px-3 py-1 text-[9px] font-bold uppercase rounded-md transition-all ${sortBy === 'model' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
@@ -909,7 +1052,15 @@ const App: React.FC = () => {
                         依據測試排列
                       </button>
                     </div>
-
+                    <button
+                      onClick={handleExportPDF}
+                      disabled={isExporting}
+                      className="no-print ml-2 px-3 py-1.5 text-[9px] font-bold uppercase rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center gap-1.5"
+                      title="將上方甘特圖擷取匯出為 PDF"
+                    >
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H8a2 2 0 01-2-2V5a2 2 0 012-2h6l6 6v9a2 2 0 01-2 2z" /></svg>
+                      {isExporting ? '匯出中...' : '匯出 PDF'}
+                    </button>
                   </div>
                   <div className="flex gap-4 text-[9px] font-bold text-slate-400 uppercase">
                     <span>A: <span className="text-indigo-600 tabular-nums">{calculationResults.trackATotal}D</span></span>
@@ -919,7 +1070,7 @@ const App: React.FC = () => {
                 </div>
 
                 {/* DUT 列 */}
-                <div className="space-y-2 max-h-[40vh] xl:max-h-[50vh] overflow-y-auto pr-1 pl-1 py-1 flex-1">
+                <div data-gantt-scroll className="space-y-2 max-h-[40vh] xl:max-h-[50vh] print:max-h-none overflow-y-auto print:overflow-visible pr-1 pl-1 py-1 flex-1">
                   {calculationResults.dutRows.map(dut => (
                     <div key={dut.id} className="flex items-center gap-2">
                       <div className="w-48 lg:w-56 shrink-0 flex items-center justify-start gap-2 pr-2">
@@ -995,7 +1146,7 @@ const App: React.FC = () => {
         </section>
 
         {/* Workspace: Test Group Details */}
-        <div className="flex-1 p-6 lg:p-10 pb-28 xl:pb-10">
+        <div className="no-print flex-1 p-6 lg:p-10 pb-28 xl:pb-10">
           <div className="w-full flex flex-col gap-6">
 
             <div className="w-full">
@@ -1168,6 +1319,21 @@ const App: React.FC = () => {
                             <button onClick={() => updateActiveModel({ pkgSampleCount: activeModel.pkgSampleCount + 1 })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
                           </div>
                         </div>
+                        {/* IP 樣品數量：僅並聯（獨立樣品）模式有作用，串聯時沿用 S&V 樣品 */}
+                        <div className={`flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10 ${activeModel.ipStrategy === ExecutionStrategy.PARALLEL ? '' : 'opacity-40'}`}>
+                          <span className="text-[10px] font-bold text-slate-400">IP 樣品數量</span>
+                          <div className="flex items-center gap-3">
+                            <button
+                              disabled={activeModel.ipStrategy !== ExecutionStrategy.PARALLEL}
+                              onClick={() => updateActiveModel({ ipSampleCount: Math.max(1, (activeModel.ipSampleCount ?? 1) - 1) })}
+                              className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 disabled:hover:bg-white/5 disabled:cursor-not-allowed transition-all">-</button>
+                            <span className="w-4 text-center font-bold tabular-nums">{activeModel.ipSampleCount ?? 1}</span>
+                            <button
+                              disabled={activeModel.ipStrategy !== ExecutionStrategy.PARALLEL}
+                              onClick={() => updateActiveModel({ ipSampleCount: (activeModel.ipSampleCount ?? 1) + 1 })}
+                              className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 disabled:hover:bg-white/5 disabled:cursor-not-allowed transition-all">+</button>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -1215,25 +1381,27 @@ const App: React.FC = () => {
                     </div>
 
 
-                    {/* Single Sample Strategy (Smart Routing) */}
+                    {/* IP（防塵/防水/鹽霧）執行策略 */}
                     <div className="space-y-3">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">高空/IP/鹽霧 執行策略</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">IP 執行策略</label>
                       <div className="grid grid-cols-2 gap-2">
                         <button
-                          onClick={() => setSingleSampleStrategy(SingleSampleStrategy.AUTO)}
-                          className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${singleSampleStrategy === SingleSampleStrategy.AUTO ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20 text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                          onClick={() => updateActiveModel({ ipStrategy: ExecutionStrategy.SERIAL })}
+                          className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${activeModel.ipStrategy !== ExecutionStrategy.PARALLEL ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20 text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
                         >
-                          智慧平衡分流
+                          串聯模式
                         </button>
                         <button
-                          onClick={() => setSingleSampleStrategy(SingleSampleStrategy.INDEPENDENT)}
-                          className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${singleSampleStrategy === SingleSampleStrategy.INDEPENDENT ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20 text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                          onClick={() => updateActiveModel({ ipStrategy: ExecutionStrategy.PARALLEL })}
+                          className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${activeModel.ipStrategy === ExecutionStrategy.PARALLEL ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20 text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
                         >
-                          消耗獨立樣品
+                          並行模式
                         </button>
                       </div>
                       <p className="text-[8px] text-slate-500 text-center font-medium italic mt-1">
-                        {singleSampleStrategy === SingleSampleStrategy.AUTO ? "💡 自動搜尋最短工期的樣品接續" : "💡 配置一台獨立新機專職執行"}
+                        {activeModel.ipStrategy === ExecutionStrategy.PARALLEL
+                          ? "💡 配置獨立樣品專職執行，各自前置 Basic Function"
+                          : "💡 沿用 S&V 樣品，接在 S&V 測試之後執行"}
                       </p>
                     </div>
 
@@ -1420,8 +1588,24 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex gap-4">
                   <div className="flex-1 space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">工期 (WD)</label>
-                    <input required type="number" step="0.5" value={editingTest.data.duration || ''} onChange={e => setEditingTest({ ...editingTest, data: { ...editingTest.data, duration: parseFloat(e.target.value) } })} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all" />
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 flex items-center gap-1">
+                      工期 (WD)
+                      {!editingTest.isNew && !isLabTA && (
+                        <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} strokeLinecap="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      )}
+                    </label>
+                    <input
+                      required type="number" step="0.5"
+                      readOnly={!editingTest.isNew && !isLabTA}
+                      value={editingTest.data.duration || ''}
+                      onChange={e => setEditingTest({ ...editingTest, data: { ...editingTest.data, duration: parseFloat(e.target.value) } })}
+                      className={`w-full rounded-xl px-4 py-3 border outline-none font-semibold transition-all ${!editingTest.isNew && !isLabTA
+                        ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-indigo-500 focus:bg-white'}`}
+                    />
+                    {!editingTest.isNew && !isLabTA && (
+                      <p className="text-[9px] text-slate-400 ml-1">基準天數由 Lab TA team 維護佈達</p>
+                    )}
                   </div>
                   <div className="flex-[2] space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">所屬類別</label>

@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Claude Code 工作副本（含已失效的舊 worktree，其 .git 指向已不存在的路徑）
+.claude/worktrees/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -5,6 +5,11 @@ import { CategoryType, StandardData } from './types';
 // 任何人在 GitHub 上編輯 data/standards.json 後，下次開啟 App 即生效
 const GITHUB_STANDARDS_URL = 'https://raw.githubusercontent.com/Gino831/DQASchedulePlanner/main/data/standards.json';
 
+// Lab TA 解鎖碼：解開「測項天數」編輯權限
+// 注意：這是前端常數，只能防止一般使用者誤改，無法防止刻意查看原始碼的人。
+// 要更換解鎖碼直接改這行即可。
+export const LAB_TA_PASSCODE = 'labta2026';
+
 // 定義每個應用都必須包含的基礎測項（BF 功能測試，不可編輯）
 export const DEFAULT_MANDATORY_TESTS = {
   [CategoryType.FUNCTION]: [
@@ -80,6 +85,8 @@ const FALLBACK_STANDARDS: StandardData[] = parseRawStandards([
         { id: 'm_c6', name: 'High temp storage test', duration: 2 },
         { id: 'm_c7', name: 'Low temp storage test', duration: 2 },
         { id: 'm_c8', name: 'Altitude test', duration: 2 },
+        { id: 'm_c9', name: 'RF Performance Test (Chamber前)', duration: 3 },
+        { id: 'm_c10', name: 'RF Performance Test (Chamber後)', duration: 3 },
       ],
       [CategoryType.VIB_SHOCK]: [
         { id: 'm_v1', name: 'Endurance vibration (Sine)', duration: 1 },
@@ -169,7 +176,13 @@ const FALLBACK_STANDARDS: StandardData[] = parseRawStandards([
 export const STANDARDS_DATA: StandardData[] = FALLBACK_STANDARDS;
 
 // 深度合併遠端與本地資料：以遠端版為底，補上本地自訂的新增或修改
-export const mergeLocalWithRemote = (remote: StandardData[], local: StandardData[]): StandardData[] => {
+// allowLocalDuration=false（預設）時，測項天數一律以遠端（Lab TA 佈達版）為準，
+// 否則使用者殘留的舊天數會永遠蓋過新公告的基準值，導致佈達失效。
+export const mergeLocalWithRemote = (
+  remote: StandardData[],
+  local: StandardData[],
+  allowLocalDuration = false
+): StandardData[] => {
   if (!local || local.length === 0) return remote;
 
   const merged = [...remote];
@@ -198,8 +211,11 @@ export const mergeLocalWithRemote = (remote: StandardData[], local: StandardData
               // 本地新增的測項
               rItems.push(lItem);
             } else {
-              // 本地修改過的測項（如修改名稱、天數等）
-              rItems[rItemIdx] = { ...rItems[rItemIdx], ...lItem };
+              // 本地修改過的測項（名稱、類別等）；天數預設鎖定為遠端佈達值
+              const remoteItem = rItems[rItemIdx];
+              rItems[rItemIdx] = allowLocalDuration
+                ? { ...remoteItem, ...lItem }
+                : { ...remoteItem, ...lItem, duration: remoteItem.duration };
             }
           });
           remoteCategories[cat] = rItems;
