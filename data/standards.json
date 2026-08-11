@@ -1,51 +1,56 @@
 [
     {
-        "_comment": "每個物件代表一個應用標準。categories 的 key 必須與 App 內的 CategoryType 一致。duration 單位為「工作天」。",
+        "_comment": "每個物件代表一個應用標準。categories 的 key 必須與 App 內的 CategoryType 一致。duration 單位為「工作天」(WD)。outsourced=true 代表外測，不佔用自有工期，quotes 為各實驗室報價(NT$)供外測費用估算。天數依 P3 階段基準表。",
         "id": "moxa",
-        "name": "Moxa Industrial",
-        "description": "核心工業自動化標準",
+        "name": "IEC 60068",
+        "description": "工業環境驗證基準",
         "icon": "factory",
         "categories": {
             "Chamber 應用": [
                 {
                     "id": "m_c1",
-                    "name": "High Temperature test",
+                    "name": "High Temperature Operation Test",
                     "duration": 1
                 },
                 {
                     "id": "m_c2",
-                    "name": "High Temperature & Humidity",
+                    "name": "High Temperature High Humidity Operation Test",
                     "duration": 1
                 },
                 {
                     "id": "m_c3",
-                    "name": "Low Temp On/Off test",
+                    "name": "Low Temperature Power ON_OFF Test",
                     "duration": 2.5
                 },
                 {
                     "id": "m_c4",
-                    "name": "High Temp On/Off test",
+                    "name": "High Temperature Power ON_OFF Test",
                     "duration": 1
                 },
                 {
                     "id": "m_c5",
-                    "name": "Temperature Cycling test",
+                    "name": "Temperature Cycle Operation Test",
                     "duration": 2.5
                 },
                 {
                     "id": "m_c6",
-                    "name": "High temp storage test",
+                    "name": "High Temperature High Humidity Storage Test",
                     "duration": 2
                 },
                 {
                     "id": "m_c7",
-                    "name": "Low temp storage test",
+                    "name": "Low Temperature Storage Test",
                     "duration": 2
                 },
                 {
                     "id": "m_c8",
                     "name": "Altitude test",
-                    "duration": 2
+                    "duration": 0,
+                    "outsourced": true,
+                    "quotes": {
+                        "SGS": 26400,
+                        "DEKRA": 35000
+                    }
                 },
                 {
                     "id": "m_c9",
@@ -61,17 +66,17 @@
             "振動衝擊應用": [
                 {
                     "id": "m_v1",
-                    "name": "Endurance vibration (Sine)",
+                    "name": "Endurance (Sine Vib)",
                     "duration": 1
                 },
                 {
                     "id": "m_v2",
-                    "name": "Random vibration test",
+                    "name": "Random test (Rand Vib)",
                     "duration": 1
                 },
                 {
                     "id": "m_v3",
-                    "name": "Shock test (half sine)",
+                    "name": "Shock Test (Half sine)",
                     "duration": 1
                 },
                 {
@@ -89,7 +94,7 @@
                 {
                     "id": "m_ip2x",
                     "name": "IP 2X",
-                    "duration": 2
+                    "duration": 1
                 },
                 {
                     "id": "m_ip3x",
@@ -148,95 +153,115 @@
                     "name": "IP X8",
                     "duration": 4.5
                 }
+            ]
+        }
+    },
+    {
+        "id": "railway",
+        "name": "EN 50155",
+        "description": "軌道交通",
+        "icon": "train",
+        "categories": {
+            "Chamber 應用": [
+                {
+                    "id": "r_c1",
+                    "name": "Low Temperature Start-up Test",
+                    "duration": 2
+                },
+                {
+                    "id": "r_c2",
+                    "name": "Dry Heat Thermal Test",
+                    "duration": 2
+                },
+                {
+                    "id": "r_c3",
+                    "name": "Cyclic Damp Heat Test (含前 IR、Hi-Pot、IR)",
+                    "duration": 6
+                },
+                {
+                    "id": "r_c4",
+                    "name": "Cyclic Damp Heat Test 後 IR、Hi-Pot、IR",
+                    "duration": 2
+                },
+                {
+                    "id": "r_c5",
+                    "name": "Inrush current (單測 4hrs)",
+                    "duration": 1
+                }
+            ],
+            "振動衝擊應用": [
+                {
+                    "id": "r_v1",
+                    "name": "LongLife Test (Rand Vib)",
+                    "duration": 1
+                },
+                {
+                    "id": "r_v2",
+                    "name": "Shock Testing (Half sine)",
+                    "duration": 1
+                },
+                {
+                    "id": "r_v3",
+                    "name": "Functional Test (Rand Vib)",
+                    "duration": 1
+                }
             ],
             "其他測試": [
                 {
-                    "id": "m_o1",
-                    "name": "Salt mist",
+                    "id": "r_o1",
+                    "name": "Salt mist test",
                     "duration": 3.5
                 }
             ]
         }
     },
     {
-        "id": "railway",
-        "name": "Railway",
-        "description": "EN 50155 軌道交通",
-        "icon": "train",
-        "categories": {
-            "Chamber 應用": [
-                {
-                    "id": "r_c1",
-                    "name": "Low Temperature Start-up",
-                    "duration": 2
-                },
-                {
-                    "id": "r_c2",
-                    "name": "Dry heat thermal test",
-                    "duration": 2
-                },
-                {
-                    "id": "r_c3",
-                    "name": "Cyclic damp heat test",
-                    "duration": 8
-                }
-            ],
-            "振動衝擊應用": [
-                {
-                    "id": "r_v1",
-                    "name": "LongLife test (Rand vib)",
-                    "duration": 1
-                },
-                {
-                    "id": "r_v2",
-                    "name": "Shock test (Half sine)",
-                    "duration": 1
-                },
-                {
-                    "id": "r_v3",
-                    "name": "Functional test (Rand vib)",
-                    "duration": 1
-                }
-            ]
-        }
-    },
-    {
         "id": "marine",
-        "name": "Marine",
-        "description": "DNVGL 船舶設備",
-        "icon": "ship",
+        "name": "Marine DNVGL/IEC 60945/E10",
+        "description": "船舶設備 (DNVGL/E10)",
+        "icon": "anchor",
         "categories": {
             "Chamber 應用": [
                 {
                     "id": "mr_c1",
-                    "name": "Dry heat",
+                    "name": "Dry heat Test",
                     "duration": 1
                 },
                 {
                     "id": "mr_c2",
-                    "name": "Cold test",
-                    "duration": 2
+                    "name": "IR (Cold Test 測試前)",
+                    "duration": 1
                 },
                 {
                     "id": "mr_c3",
-                    "name": "Low temperature startup",
-                    "duration": 2
+                    "name": "Low Temperature Operational",
+                    "duration": 1
                 },
                 {
                     "id": "mr_c4",
-                    "name": "Damp heat",
-                    "duration": 4
+                    "name": "IR (Cold Test 測試後 / Low temperature start-up 測試前)",
+                    "duration": 1
                 },
                 {
                     "id": "mr_c5",
-                    "name": "Hi-Pot",
+                    "name": "Low temperature start-up",
+                    "duration": 1
+                },
+                {
+                    "id": "mr_c6",
+                    "name": "IR (Low temperature start-up 測試後 / Damp Heat 測試前) 接 Damp Heat",
+                    "duration": 4
+                },
+                {
+                    "id": "mr_c7",
+                    "name": "IR (Damp Heat 測試後 / Hi-pot 測試前) + Hi-pot + IR",
                     "duration": 2
                 }
             ],
             "振動衝擊應用": [
                 {
                     "id": "mr_v1",
-                    "name": "Vibration (Sine Wave)",
+                    "name": "Vibration (Sine Vib)",
                     "duration": 2
                 },
                 {
@@ -248,25 +273,62 @@
         }
     },
     {
+        "id": "marine_60945",
+        "name": "Marine IEC 60945",
+        "description": "船舶設備 (IEC 60945)",
+        "icon": "anchor",
+        "categories": {
+            "Chamber 應用": [
+                {
+                    "id": "mr45_c1",
+                    "name": "Dry Heat Test",
+                    "duration": 1
+                },
+                {
+                    "id": "mr45_c2",
+                    "name": "Damp heat Test",
+                    "duration": 2
+                },
+                {
+                    "id": "mr45_c3",
+                    "name": "Low temperature Test",
+                    "duration": 1
+                }
+            ],
+            "振動衝擊應用": [
+                {
+                    "id": "mr45_v1",
+                    "name": "Vibration (Sine Vib)",
+                    "duration": 2
+                },
+                {
+                    "id": "mr45_v2",
+                    "name": "Wideband random",
+                    "duration": 1
+                }
+            ]
+        }
+    },
+    {
         "id": "power",
-        "name": "Power Station",
-        "description": "IEC 61850-3 變電站",
+        "name": "IEC 61850",
+        "description": "變電站",
         "icon": "bolt",
         "categories": {
             "Chamber 應用": [
                 {
                     "id": "p_c1",
-                    "name": "Cold Test Operation",
+                    "name": "Cold Test Operational",
                     "duration": 3
                 },
                 {
                     "id": "p_c2",
-                    "name": "Dry Heat test Operation",
+                    "name": "Dry Heat Test Operational",
                     "duration": 3
                 },
                 {
                     "id": "p_c3",
-                    "name": "Damp Heat Cyclic test",
+                    "name": "Damp Heat Cyclic Test",
                     "duration": 9
                 },
                 {
@@ -276,55 +338,70 @@
                 },
                 {
                     "id": "p_c5",
-                    "name": "Change of Temperature test",
+                    "name": "Change of Temperature Test",
                     "duration": 4
                 },
                 {
                     "id": "p_c6",
-                    "name": "Cold storage temp",
+                    "name": "Cold Test Minimum Storage Temperature",
                     "duration": 3
                 },
                 {
                     "id": "p_c7",
-                    "name": "Dry heat max storage",
+                    "name": "Dry Heat Test Maximum Storage Temperature",
                     "duration": 3
                 },
                 {
                     "id": "p_c8",
-                    "name": "IR & Hi-Pot",
+                    "name": "IR、Hi-Pot、IR",
                     "duration": 2
+                },
+                {
+                    "id": "p_c9",
+                    "name": "Burden test",
+                    "duration": 1
                 }
             ],
             "振動衝擊應用": [
                 {
                     "id": "p_v1",
-                    "name": "Vib resonance",
+                    "name": "Vibration resonance Test (Sine Vib)",
                     "duration": 1
                 },
                 {
                     "id": "p_v2",
-                    "name": "Vib endurance",
+                    "name": "Vibration endurance Test (Sine Vib)",
                     "duration": 1
                 },
                 {
                     "id": "p_v3",
-                    "name": "Shock response",
+                    "name": "Shock response Test (Half sine)",
                     "duration": 0.5
                 },
                 {
                     "id": "p_v4",
-                    "name": "Shock withstand",
+                    "name": "Shock WithStand Test (Half sine)",
                     "duration": 0.5
                 },
                 {
                     "id": "p_v5",
-                    "name": "Bump test",
-                    "duration": 1
+                    "name": "NOP Bump test",
+                    "duration": 0,
+                    "outsourced": true,
+                    "quotes": {
+                        "SGS": 38500,
+                        "KDI": 13000
+                    }
                 },
                 {
                     "id": "p_v6",
-                    "name": "Seismic test",
-                    "duration": 2
+                    "name": "OP Seismic",
+                    "duration": 0,
+                    "outsourced": true,
+                    "quotes": {
+                        "SGS": 4800,
+                        "KDI": 3200
+                    }
                 }
             ]
         }
