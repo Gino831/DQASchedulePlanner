@@ -204,6 +204,19 @@ const App: React.FC = () => {
       document.body.appendChild(holder);
       await new Promise(requestAnimationFrame);
 
+      // html2canvas 的文字基線會比實際版面低（DOM 本身置中無誤，實測 8px 字低 4.0px、
+      // 10px 字低 5.5px，擬合為 0.75×字級−2）。此處回推補正，讓文字在色塊/徽章內置中。
+      // 只處理 12px 以下的標籤，避免動到總工期那類大字級數字。
+      clone.querySelectorAll<HTMLElement>('*').forEach(el => {
+        if (el.children.length > 0 || !el.textContent?.trim()) return;
+        const fontSize = parseFloat(getComputedStyle(el).fontSize);
+        if (!fontSize || fontSize > 12) return;
+        const shift = 0.75 * fontSize - 2;
+        if (shift <= 0) return;
+        el.style.position = 'relative';
+        el.style.top = `-${shift}px`;
+      });
+
       const canvas = await html2canvas(holder, {
         scale: EXPORT_SCALE,
         backgroundColor: '#ffffff',
