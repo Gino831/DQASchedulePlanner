@@ -330,11 +330,14 @@ const App: React.FC = () => {
 
 
   // 儲存最新的 standards 到 localStorage，以保留使用者的本地備份，避免離線時完全沒資料
+  // 必須等遠端載入完成才寫入：否則初始的內建 fallback 會先被存成「本地修改」，
+  // 之後合併時反而蓋過 Lab TA 佈達版（名稱與既有測項都會停留在舊值）。
   useEffect(() => {
+    if (dataSource === 'loading') return;
     if (standards.length > 0) {
       localStorage.setItem('dqa_planner_v13', JSON.stringify(standards));
     }
-  }, [standards]);
+  }, [standards, dataSource]);
 
   const toggleApp = (appId: string) => {
     const allDefaults = getDefaultSelectedTests(standards);
@@ -529,6 +532,8 @@ const App: React.FC = () => {
           const catType = cat as CategoryType;
           (items as any[] | undefined)?.forEach(item => {
             if (selectedMap[item.id]) {
+              // 外測項目不佔用自有設備工期，只累計費用（於 outsourcedCost 統計）
+              if (item.outsourced) return;
               const nameLower = item.name.toLowerCase();
               const isPkg = nameLower.includes('pkg') || nameLower.includes('包裝');
               const isStorage = nameLower.includes('storage');
@@ -963,6 +968,34 @@ const App: React.FC = () => {
     };
   }, [standards, models, strategy, storageStrategy, pkgStrategy, sortBy]);
 
+  // 外測費用估算：彙總已勾選的外測項目各實驗室報價，取最低價作為建議估算
+  const outsourcedCost = useMemo(() => {
+    const items: Array<{ name: string; modelName: string; quotes: Record<string, number> }> = [];
+    models.forEach(model => {
+      const selected = model.selectedTests || {};
+      (model.standardIds || []).forEach(sid => {
+        const std = standards.find(s => s.id === sid);
+        if (!std) return;
+        Object.values(std.categories).forEach(list => {
+          (list || []).forEach(item => {
+            if (item.outsourced && selected[item.id]) {
+              items.push({ name: item.name, modelName: model.name, quotes: item.quotes || {} });
+            }
+          });
+        });
+      });
+    });
+    const vendorTotals: Record<string, number> = {};
+    let lowestTotal = 0;
+    items.forEach(({ quotes }) => {
+      Object.entries(quotes).forEach(([v, price]) => {
+        vendorTotals[v] = (vendorTotals[v] || 0) + price;
+      });
+      const vals = Object.values(quotes);
+      if (vals.length) lowestTotal += Math.min(...vals);
+    });
+    return { items, vendorTotals, lowestTotal, count: items.length };
+  }, [standards, models]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row text-slate-800 font-sans">
@@ -1153,6 +1186,28 @@ const App: React.FC = () => {
                     <span className="text-xs font-bold ml-1 uppercase">Sets</span>
                   </div>
                 </div>
+                {/* 外測費用估算：外測項目不佔工期，僅估費用 */}
+                {outsourcedCost.count > 0 && (
+                  <div className="text-right">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                      外測費用估算<span className="text-slate-300 normal-case tracking-normal">（{outsourcedCost.count} 項）</span>
+                    </p>
+                    <div className="flex items-baseline justify-end text-amber-600">
+                      <span className="text-xs font-bold mr-1">NT$</span>
+                      <span className="text-3xl xl:text-4xl font-light tabular-nums leading-none tracking-tighter">
+                        {outsourcedCost.lowestTotal.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex flex-col items-end gap-0.5">
+                      {Object.entries(outsourcedCost.vendorTotals).map(([vendor, total]) => (
+                        <span key={vendor} className="text-[8px] text-slate-400 tabular-nums">
+                          {vendor} NT${total.toLocaleString()}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-[8px] text-slate-300 mt-0.5">取各項最低報價估算</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1259,8 +1314,13 @@ const App: React.FC = () => {
                                         <div className="flex items-center gap-2">
                                           <p className={`text-sm font-semibold transition-colors ${isSelected ? 'text-slate-900' : 'text-slate-400'}`}>{item.name}</p>
                                           {isPkg && <span className="text-[8px] bg-slate-800 text-white px-1.5 py-0.5 rounded font-black uppercase">PKG</span>}
+                                          {item.outsourced && <span className="text-[8px] bg-amber-500 text-white px-1.5 py-0.5 rounded font-black">外測</span>}
                                         </div>
-                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{item.duration} WD</p>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                                          {item.outsourced
+                                            ? `不佔工期${item.quotes ? ' · ' + Object.entries(item.quotes).map(([v, p]) => `${v} NT$${p.toLocaleString()}`).join(' / ') : ''}`
+                                            : `${item.duration} WD`}
+                                        </p>
                                       </div>
                                       <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm' : 'border-slate-200'}`}>
                                         {isSelected && <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg>}

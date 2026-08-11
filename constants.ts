@@ -13,11 +13,12 @@ export const LAB_TA_PASSCODE = 'labta2026';
 // 定義每個應用都必須包含的基礎測項（BF 功能測試，不可編輯）
 export const DEFAULT_MANDATORY_TESTS = {
   [CategoryType.FUNCTION]: [
-    { id: 'default_bf_env', name: 'Basic Function (Env)', duration: 2, category: CategoryType.FUNCTION },
-    { id: 'default_bf_pkg', name: 'Basic Function (PKG)', duration: 2, category: CategoryType.FUNCTION },
+    // P3 階段基準：Basic Function test 為 3 工作天
+    { id: 'default_bf_env', name: 'Basic Function (Env)', duration: 3, category: CategoryType.FUNCTION },
+    { id: 'default_bf_pkg', name: 'Basic Function (PKG)', duration: 3, category: CategoryType.FUNCTION },
   ],
   [CategoryType.VIB_SHOCK]: [
-    { id: 'default_bf_mech', name: 'Basic Function (Mech)', duration: 2, category: CategoryType.VIB_SHOCK },
+    { id: 'default_bf_mech', name: 'Basic Function (Mech)', duration: 3, category: CategoryType.VIB_SHOCK },
   ]
 };
 

@@ -11,8 +11,10 @@ export enum CategoryType {
 export interface TestItem {
   id: string;
   name: string;
-  duration: number; // in days
+  duration: number; // 工作天 (WD)；外測項目為 0，不佔用自有工期
   category: CategoryType;
+  outsourced?: boolean; // 外測：不佔用自有設備工期，僅計費用
+  quotes?: Record<string, number>; // 各實驗室報價 (NT$)，如 { SGS: 26400, DEKRA: 35000 }
 }
 
 export interface StandardData {
