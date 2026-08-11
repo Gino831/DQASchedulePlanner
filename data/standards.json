@@ -45,7 +45,7 @@
                 {
                     "id": "m_c8",
                     "name": "Altitude test",
-                    "duration": 0,
+                    "duration": 2,
                     "outsourced": true,
                     "quotes": {
                         "SGS": 26400,
@@ -153,6 +153,18 @@
                     "name": "IP X8",
                     "duration": 4.5
                 }
+            ],
+            "其他測試": [
+                {
+                    "id": "m_o1",
+                    "name": "Salt mist test",
+                    "duration": 3.5
+                },
+                {
+                    "id": "m_o2",
+                    "name": "Interconnector durability (插拔測試)",
+                    "duration": 1
+                }
             ]
         }
     },
@@ -204,13 +216,6 @@
                     "id": "r_v3",
                     "name": "Functional Test (Rand Vib)",
                     "duration": 1
-                }
-            ],
-            "其他測試": [
-                {
-                    "id": "r_o1",
-                    "name": "Salt mist test",
-                    "duration": 3.5
                 }
             ]
         }
@@ -386,7 +391,7 @@
                 {
                     "id": "p_v5",
                     "name": "NOP Bump test",
-                    "duration": 0,
+                    "duration": 1,
                     "outsourced": true,
                     "quotes": {
                         "SGS": 38500,
@@ -396,7 +401,7 @@
                 {
                     "id": "p_v6",
                     "name": "OP Seismic",
-                    "duration": 0,
+                    "duration": 2,
                     "outsourced": true,
                     "quotes": {
                         "SGS": 4800,

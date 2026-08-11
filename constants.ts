@@ -1,5 +1,6 @@
 
 import { CategoryType, StandardData } from './types';
+import rawStandards from './data/standards.json';
 
 // GitHub raw URL — 從此處動態載入最新測項資料
 // 任何人在 GitHub 上編輯 data/standards.json 後，下次開啟 App 即生效
@@ -72,106 +73,11 @@ const parseRawStandards = (rawData: any[]): StandardData[] => {
   });
 };
 
-// 內建預設資料（離線 fallback，與 data/standards.json 內容一致）
-const FALLBACK_STANDARDS: StandardData[] = parseRawStandards([
-  {
-    id: 'moxa', name: 'Moxa Industrial', description: '核心工業自動化標準', icon: 'factory',
-    categories: {
-      [CategoryType.CHAMBER]: [
-        { id: 'm_c1', name: 'High Temperature test', duration: 1 },
-        { id: 'm_c2', name: 'High Temperature & Humidity', duration: 1 },
-        { id: 'm_c3', name: 'Low Temp On/Off test', duration: 2.5 },
-        { id: 'm_c4', name: 'High Temp On/Off test', duration: 1 },
-        { id: 'm_c5', name: 'Temperature Cycling test', duration: 2.5 },
-        { id: 'm_c6', name: 'High temp storage test', duration: 2 },
-        { id: 'm_c7', name: 'Low temp storage test', duration: 2 },
-        { id: 'm_c8', name: 'Altitude test', duration: 2 },
-        { id: 'm_c9', name: 'RF Performance Test (Chamber前)', duration: 3 },
-        { id: 'm_c10', name: 'RF Performance Test (Chamber後)', duration: 3 },
-      ],
-      [CategoryType.VIB_SHOCK]: [
-        { id: 'm_v1', name: 'Endurance vibration (Sine)', duration: 1 },
-        { id: 'm_v2', name: 'Random vibration test', duration: 1 },
-        { id: 'm_v3', name: 'Shock test (half sine)', duration: 1 },
-        { id: 'm_v4', name: 'PKG Vib', duration: 1 },
-        { id: 'm_v5', name: 'PKG Drop', duration: 1 },
-      ],
-      [CategoryType.DUST_TEST]: [
-        { id: 'm_ip2x', name: 'IP 2X', duration: 2 },
-        { id: 'm_ip3x', name: 'IP 3X', duration: 1 },
-        { id: 'm_ip4x', name: 'IP 4X', duration: 1 },
-        { id: 'm_ip5x', name: 'IP 5X', duration: 2 },
-        { id: 'm_ip6x', name: 'IP 6X', duration: 3.5 },
-      ],
-      [CategoryType.WATER_TEST]: [
-        { id: 'm_ipx2', name: 'IP X2', duration: 2 },
-        { id: 'm_ipx3', name: 'IP X3', duration: 2 },
-        { id: 'm_ipx4', name: 'IP X4', duration: 2 },
-        { id: 'm_ipx5', name: 'IP X5', duration: 4.5 },
-        { id: 'm_ipx6', name: 'IP X6', duration: 4.5 },
-        { id: 'm_ipx7', name: 'IP X7', duration: 4.5 },
-        { id: 'm_ipx8', name: 'IP X8', duration: 4.5 },
-      ],
-      [CategoryType.OTHER]: [
-        { id: 'm_o1', name: 'Salt mist', duration: 3.5 },
-      ]
-    }
-  },
-  {
-    id: 'railway', name: 'Railway', description: 'EN 50155 軌道交通', icon: 'train',
-    categories: {
-      [CategoryType.CHAMBER]: [
-        { id: 'r_c1', name: 'Low Temperature Start-up', duration: 2 },
-        { id: 'r_c2', name: 'Dry heat thermal test', duration: 2 },
-        { id: 'r_c3', name: 'Cyclic damp heat test', duration: 8 },
-      ],
-      [CategoryType.VIB_SHOCK]: [
-        { id: 'r_v1', name: 'LongLife test (Rand vib)', duration: 1 },
-        { id: 'r_v2', name: 'Shock test (Half sine)', duration: 1 },
-        { id: 'r_v3', name: 'Functional test (Rand vib)', duration: 1 },
-      ]
-    }
-  },
-  {
-    id: 'marine', name: 'Marine', description: 'DNVGL 船舶設備', icon: 'ship',
-    categories: {
-      [CategoryType.CHAMBER]: [
-        { id: 'mr_c1', name: 'Dry heat', duration: 1 },
-        { id: 'mr_c2', name: 'Cold test', duration: 2 },
-        { id: 'mr_c3', name: 'Low temperature startup', duration: 2 },
-        { id: 'mr_c4', name: 'Damp heat', duration: 4 },
-        { id: 'mr_c5', name: 'Hi-Pot', duration: 2 },
-      ],
-      [CategoryType.VIB_SHOCK]: [
-        { id: 'mr_v1', name: 'Vibration (Sine Wave)', duration: 2 },
-        { id: 'mr_v2', name: 'Wideband random', duration: 1 },
-      ]
-    }
-  },
-  {
-    id: 'power', name: 'Power Station', description: 'IEC 61850-3 變電站', icon: 'bolt',
-    categories: {
-      [CategoryType.CHAMBER]: [
-        { id: 'p_c1', name: 'Cold Test Operation', duration: 3 },
-        { id: 'p_c2', name: 'Dry Heat test Operation', duration: 3 },
-        { id: 'p_c3', name: 'Damp Heat Cyclic test', duration: 9 },
-        { id: 'p_c4', name: 'Damp Heat Steady State', duration: 13 },
-        { id: 'p_c5', name: 'Change of Temperature test', duration: 4 },
-        { id: 'p_c6', name: 'Cold storage temp', duration: 3 },
-        { id: 'p_c7', name: 'Dry heat max storage', duration: 3 },
-        { id: 'p_c8', name: 'IR & Hi-Pot', duration: 2 },
-      ],
-      [CategoryType.VIB_SHOCK]: [
-        { id: 'p_v1', name: 'Vib resonance', duration: 1 },
-        { id: 'p_v2', name: 'Vib endurance', duration: 1 },
-        { id: 'p_v3', name: 'Shock response', duration: 0.5 },
-        { id: 'p_v4', name: 'Shock withstand', duration: 0.5 },
-        { id: 'p_v5', name: 'Bump test', duration: 1 },
-        { id: 'p_v6', name: 'Seismic test', duration: 2 },
-      ]
-    }
-  }
-]);
+// 內建預設資料（離線 fallback）
+// 直接沿用 data/standards.json——該檔是 Lab TA 佈達的唯一真實來源。
+// 過去這裡是手抄的字面副本，結果與佈達版漂移（名稱、天數都停留在舊值），
+// 因此改為 import，讓兩者不可能再不一致。
+const FALLBACK_STANDARDS: StandardData[] = parseRawStandards(rawStandards as any[]);
 
 // 預設匯出（離線 fallback）
 export const STANDARDS_DATA: StandardData[] = FALLBACK_STANDARDS;

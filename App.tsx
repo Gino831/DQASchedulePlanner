@@ -532,8 +532,7 @@ const App: React.FC = () => {
           const catType = cat as CategoryType;
           (items as any[] | undefined)?.forEach(item => {
             if (selectedMap[item.id]) {
-              // 外測項目不佔用自有設備工期，只累計費用（於 outsourcedCost 統計）
-              if (item.outsourced) return;
+              // 外測項目照常計入工期（送外部實驗室仍佔用時程），另在 outsourcedCost 統計費用
               const nameLower = item.name.toLowerCase();
               const isPkg = nameLower.includes('pkg') || nameLower.includes('包裝');
               const isStorage = nameLower.includes('storage');
@@ -969,6 +968,7 @@ const App: React.FC = () => {
   }, [standards, models, strategy, storageStrategy, pkgStrategy, sortBy]);
 
   // 外測費用估算：彙總已勾選的外測項目各實驗室報價，取最低價作為建議估算
+  // 註：外測項目仍計入工期（見計算引擎），此處只負責費用
   const outsourcedCost = useMemo(() => {
     const items: Array<{ name: string; modelName: string; quotes: Record<string, number> }> = [];
     models.forEach(model => {
@@ -1317,9 +1317,12 @@ const App: React.FC = () => {
                                           {item.outsourced && <span className="text-[8px] bg-amber-500 text-white px-1.5 py-0.5 rounded font-black">外測</span>}
                                         </div>
                                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                                          {item.outsourced
-                                            ? `不佔工期${item.quotes ? ' · ' + Object.entries(item.quotes).map(([v, p]) => `${v} NT$${p.toLocaleString()}`).join(' / ') : ''}`
-                                            : `${item.duration} WD`}
+                                          {item.duration} WD
+                                          {item.outsourced && item.quotes && (
+                                            <span className="text-amber-600 normal-case tracking-normal">
+                                              {' · ' + Object.entries(item.quotes).map(([v, p]) => `${v} NT$${p.toLocaleString()}`).join(' / ')}
+                                            </span>
+                                          )}
                                         </p>
                                       </div>
                                       <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm' : 'border-slate-200'}`}>
