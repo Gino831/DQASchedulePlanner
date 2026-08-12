@@ -373,6 +373,14 @@ const App: React.FC = () => {
     });
   };
 
+  // 臨時把某測項切換為外測（或切回自測）——時程吃緊時用來即時比較工期與費用
+  const toggleOutsource = (itemId: string) => {
+    updateActiveModel(prev => {
+      const current = prev.outsourcedOverrides || {};
+      return { outsourcedOverrides: { ...current, [itemId]: !current[itemId] } };
+    });
+  };
+
   const toggleAllInStandard = (standard: StandardData, select: boolean) => {
     updateActiveModel(prev => {
       if (!prev.standardIds?.includes(standard.id)) return null;
@@ -486,6 +494,7 @@ const App: React.FC = () => {
       if (selectedStandards.length === 0) return;
 
       const selectedMap = model.selectedTests || {};
+      const overrideMap = model.outsourcedOverrides || {};
 
       // 各測項分類 — 合併為每標準每類別一個段落，多選標準以不同顏色區分
       const envBaseSegments: Seg[] = [];
@@ -541,7 +550,7 @@ const App: React.FC = () => {
             if (selectedMap[item.id]) {
               // 外測：不併入任何既有類別，改為獨立成段（BF 2 天前置 + 測項本身），
               // 於下方接在 S&V 之後。仍計入工期，費用另於 outsourcedCost 統計。
-              if (item.outsourced) {
+              if (item.outsourced || overrideMap[item.id]) {
                 const bfColor = CATEGORY_COLORS[CategoryType.FUNCTION];
                 outsourcedSegments.push(
                   { label: 'BF 前置', days: OUTSOURCE_PREP_DAYS, bg: bfColor.bg, text: bfColor.text },
@@ -1008,12 +1017,13 @@ const App: React.FC = () => {
     const items: Array<{ name: string; modelName: string; quotes: Record<string, number> }> = [];
     models.forEach(model => {
       const selected = model.selectedTests || {};
+      const overrides = model.outsourcedOverrides || {};
       (model.standardIds || []).forEach(sid => {
         const std = standards.find(s => s.id === sid);
         if (!std) return;
         Object.values(std.categories).forEach(list => {
           (list || []).forEach(item => {
-            if (item.outsourced && selected[item.id]) {
+            if ((item.outsourced || overrides[item.id]) && selected[item.id]) {
               items.push({ name: item.name, modelName: model.name, quotes: item.quotes || {} });
             }
           });
@@ -1339,6 +1349,11 @@ const App: React.FC = () => {
                               {items.map(item => {
                                 const isSelected = activeModel.selectedTests?.[item.id];
                                 const isPkg = item.name.toLowerCase().includes('pkg');
+                                const isOverridden = !!activeModel.outsourcedOverrides?.[item.id];
+                                const isOut = !!item.outsourced || isOverridden;
+                                const quoteText = item.quotes
+                                  ? Object.entries(item.quotes).map(([v, p]) => `${v} NT$${p.toLocaleString()}`).join(' / ')
+                                  : null;
                                 return (
                                   <div key={item.id} className="relative group/card">
                                     <div
@@ -1349,13 +1364,17 @@ const App: React.FC = () => {
                                         <div className="flex items-center gap-2">
                                           <p className={`text-sm font-semibold transition-colors ${isSelected ? 'text-slate-900' : 'text-slate-400'}`}>{item.name}</p>
                                           {isPkg && <span className="text-[8px] bg-slate-800 text-white px-1.5 py-0.5 rounded font-black uppercase">PKG</span>}
-                                          {item.outsourced && <span className="text-[8px] bg-amber-500 text-white px-1.5 py-0.5 rounded font-black">外測</span>}
+                                          {isOut && (
+                                            <span className="text-[8px] bg-amber-500 text-white px-1.5 py-0.5 rounded font-black">
+                                              外測{isOverridden && !item.outsourced ? '(臨時)' : ''}
+                                            </span>
+                                          )}
                                         </div>
                                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">
                                           {item.duration} WD
-                                          {item.outsourced && item.quotes && (
-                                            <span className="text-amber-600 normal-case tracking-normal">
-                                              {' · ' + Object.entries(item.quotes).map(([v, p]) => `${v} NT$${p.toLocaleString()}`).join(' / ')}
+                                          {quoteText && (
+                                            <span className={`normal-case tracking-normal ${isOut ? 'text-amber-600' : 'text-slate-300'}`}>
+                                              {' · ' + quoteText}
                                             </span>
                                           )}
                                         </p>
@@ -1366,6 +1385,14 @@ const App: React.FC = () => {
                                     </div>
 
                                     <div className="absolute top-1/2 -translate-y-1/2 right-12 flex gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity z-10 scale-90">
+                                      {/* 臨時改外測：時程吃緊時即時比較工期與費用；本質外測項目不提供切回 */}
+                                      {!item.outsourced && (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); toggleOutsource(item.id); }}
+                                          title={isOverridden ? '改回自測' : '臨時改為外測（前置 2 天 BF，接在 S&V 之後）'}
+                                          className={`px-2.5 py-2 rounded-xl shadow-lg border text-[9px] font-black hover:scale-110 transition-all ${isOverridden ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-400 border-slate-100 hover:text-amber-600'}`}
+                                        >外測</button>
+                                      )}
                                       <button onClick={(e) => { e.stopPropagation(); setEditingTest({ standardId: standard.id, isNew: false, data: item }); }} className="p-2.5 bg-white rounded-xl shadow-lg border border-slate-100 text-slate-400 hover:text-indigo-600 hover:scale-110 transition-all"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2.5} /></svg></button>
                                       <button onClick={(e) => deleteTestItem(e, standard.id, cat, item.id)} className="p-2.5 bg-white rounded-xl shadow-lg border border-slate-100 text-slate-400 hover:text-rose-600 hover:scale-110 transition-all"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth={2.5} /></svg></button>
                                     </div>

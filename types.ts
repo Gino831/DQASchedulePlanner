@@ -46,6 +46,9 @@ export interface ModelEntry {
   mechSampleCount: number;
   pkgSampleCount: number;
   ipSampleCount: number; // IP/防塵防水/鹽霧 樣品數量（僅並聯模式有作用）
+  // 臨時改走外測的測項：時程吃緊時可把自測項目切為外測，即時看到工期與費用變化。
+  // 與 TestItem.outsourced（Lab TA 佈達的本質屬性）分開存放，不影響基準資料。
+  outsourcedOverrides?: Record<string, boolean>;
   mechStrategy?: ExecutionStrategy; // S&V 執行策略
   ipStrategy?: ExecutionStrategy; // IP 執行策略：並聯=獨立樣品(前置 BF)、串聯=接在 S&V 之後
 }
