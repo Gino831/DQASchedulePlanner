@@ -314,7 +314,9 @@ const App: React.FC = () => {
             ? `<div style="color:#b91c1c;font-weight:bold;">※ 另有 ${outsourcedCost.unpricedCount} 項未提供報價，未納入上方合計，實際金額將高於此數。</div>`
             : ''}
           <div>※ 單價為內部參考價，非實驗室正式報價；正式金額以各實驗室回覆為準。</div>
-          <div>※ 相同外測項目跨型號可同爐測試，費用僅計一次（標示「同爐共用」者）。</div>
+          <div>${shareChamber
+            ? '※ 相同外測項目跨型號可同爐測試，費用僅計一次（標示「同爐共用」者）。'
+            : '※ 型號無法同爐，相同外測項目已逐型號分別計費。'}</div>
           <div>※ 排程已計入送件前 ${OUTSOURCE_PREP_DAYS} 個工作天的 Basic Function 備機時間（同一台樣品僅計一次）。</div>
         </div>`;
       document.body.appendChild(holder);
@@ -392,6 +394,9 @@ const App: React.FC = () => {
   const [strategy, setStrategy] = useState<ExecutionStrategy>(ExecutionStrategy.PARALLEL);
   const [storageStrategy, setStorageStrategy] = useState<ExecutionStrategy>(ExecutionStrategy.PARALLEL);
   const [pkgStrategy, setPkgStrategy] = useState<PkgSampleStrategy>(PkgSampleStrategy.REUSE);
+  // 相同外測項目跨型號是否同爐測試：同爐則實驗室只收一次費用。
+  // 型號體積過大塞不進同一爐時關閉，改為逐型號計費。
+  const [shareChamber, setShareChamber] = useState<boolean>(true);
 
   const [editingStandard, setEditingStandard] = useState<{ isNew: boolean, data: Partial<StandardData> } | null>(null);
   const [editingTest, setEditingTest] = useState<{ standardId: string, isNew: boolean, data: Partial<TestItem> } | null>(null);
@@ -1152,7 +1157,9 @@ const App: React.FC = () => {
             if (!selected[item.id]) return;
             if (!item.outsourced && !overrides[item.id]) return;
             if (isRfItem(item.name)) return; // RF 不外測，殘留的 override 也不計費
-            const existing = byItem.get(item.id);
+            // 同爐共用時以測項 id 去重；關閉時每個型號各自計費
+            const key = shareChamber ? item.id : `${model.id}::${item.id}`;
+            const existing = byItem.get(key);
             if (existing) {
               // 同測項不同型號：同爐測試，費用不重複計，只記錄共用型號
               if (!existing.modelNames.includes(model.name)) existing.modelNames.push(model.name);
@@ -1164,7 +1171,7 @@ const App: React.FC = () => {
             const best = entries.length
               ? entries.reduce((a, b) => (b[1] < a[1] ? b : a))
               : null;
-            byItem.set(item.id, {
+            byItem.set(key, {
               modelNames: [model.name], standardName: std.name, name: item.name,
               duration: item.duration, quotes,
               vendor: best ? best[0] : null,
@@ -1189,7 +1196,7 @@ const App: React.FC = () => {
       items, vendorTotals, lowestTotal, count: items.length,
       pricedCount: priced.length, unpricedCount: unpriced.length, unpriced,
     };
-  }, [standards, models]);
+  }, [standards, models, shareChamber]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row text-slate-800 font-sans">
@@ -1706,6 +1713,30 @@ const App: React.FC = () => {
                         {activeModel.ipStrategy === ExecutionStrategy.PARALLEL
                           ? "💡 配置獨立樣品專職執行，各自前置 Basic Function"
                           : "💡 沿用 S&V 樣品，接在 S&V 測試之後執行"}
+                      </p>
+                    </div>
+
+                    {/* 外測同爐共用：影響費用估算，不影響排程 */}
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">外測同爐共用</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setShareChamber(true)}
+                          className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${shareChamber ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20 text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                        >
+                          可同爐
+                        </button>
+                        <button
+                          onClick={() => setShareChamber(false)}
+                          className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${!shareChamber ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20 text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                        >
+                          各自送測
+                        </button>
+                      </div>
+                      <p className="text-[8px] text-slate-500 text-center font-medium italic mt-1 leading-snug">
+                        {shareChamber
+                          ? '💡 相同外測項目跨型號同爐，實驗室費用只計一次'
+                          : '💡 型號體積過大無法同爐，費用逐型號分別計算'}
                       </p>
                     </div>
 
