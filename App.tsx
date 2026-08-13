@@ -112,6 +112,13 @@ const APP_COLORS: Record<string, string> = {
 // 外測送件前的 Basic Function 準備天數
 const OUTSOURCE_PREP_DAYS = 2;
 
+// RF Performance Test 不提供外測選項（由 RF 測試工程師執行，不送外部實驗室）
+// 排程、費用、UI 三處共用此判定，確保殘留的 override 也不會生效
+const isRfItem = (name: string) => {
+  const n = name.toLowerCase();
+  return n.includes('rf performance') || n.includes('rf test');
+};
+
 const CATEGORY_COLORS: Record<string, { bg: string, text: string, label: string }> = {
   [CategoryType.FUNCTION]: { bg: 'bg-sky-400', text: 'text-white', label: 'BF' },
   storage: { bg: 'bg-purple-500', text: 'text-white', label: 'Storage' },
@@ -626,9 +633,6 @@ const App: React.FC = () => {
         let stdAltDays = 0;
         let stdRfPreDays = 0;
         let stdRfPostDays = 0;
-        // RF 走外測時位置不變，僅標色與標註區隔
-        let stdRfPreOut = false;
-        let stdRfPostOut = false;
 
         let stdIpDays = 0;
         let stdMechDays = 0;
@@ -646,15 +650,14 @@ const App: React.FC = () => {
 
               const isIpOtherCategory = [CategoryType.DUST_TEST, CategoryType.WATER_TEST, CategoryType.OTHER].includes(catType);
               // RF Performance Test：以名稱區分 Chamber 前/後，於甘特圖獨立成段
-              const isRf = nameLower.includes('rf performance') || nameLower.includes('rf test');
+              const isRf = isRfItem(item.name);
               const isRfPost = isRf && (item.name.includes('後') || nameLower.includes('post') || nameLower.includes('after'));
               const isRfPre = isRf && !isRfPost;
-              const isOutsourced = !!item.outsourced || !!overrideMap[item.id];
+              // RF 不可外測，因此 RF 一律走原本的排程位置
+              const isOutsourced = (!!item.outsourced || !!overrideMap[item.id]) && !isRf;
 
-              // 外測：不併入既有類別，改為獨立成段接在 ENV 之後（BF 前置於下方統一補一次）。
-              // 但 RF 前/後的位置由測試流程決定（BF 之前 / Chamber 之後），
-              // 即使改走外測也不改變排程位置，只在費用上計為外測。
-              if (isOutsourced && !isRf) {
+              // 外測：不併入既有類別，改為獨立成段接在 ENV 之後（BF 前置於下方統一補一次）
+              if (isOutsourced) {
                 outsourcedSegments.push(
                   { label: stdTag + item.name, days: item.duration, bg: 'bg-amber-500', text: 'text-white' }
                 );
@@ -664,10 +667,8 @@ const App: React.FC = () => {
 
               if (isRfPre) {
                 stdRfPreDays += item.duration;
-                if (isOutsourced) stdRfPreOut = true;
               } else if (isRfPost) {
                 stdRfPostDays += item.duration;
-                if (isOutsourced) stdRfPostOut = true;
               } else if (isPkg && isBF) {
                 pkgBfDays = Math.max(pkgBfDays, item.duration);
               } else if (isBF) {
@@ -698,13 +699,11 @@ const App: React.FC = () => {
           envBaseDays += stdEnvDays;
         }
         if (stdRfPreDays > 0) {
-          const c = stdRfPreOut ? CATEGORY_COLORS.outsourced : CATEGORY_COLORS.rf;
-          rfPreSegments.push({ label: stdTag + 'RF 前' + (stdRfPreOut ? '(外測)' : ''), days: stdRfPreDays, bg: c.bg, text: c.text });
+          rfPreSegments.push({ label: stdTag + 'RF 前', days: stdRfPreDays, bg: CATEGORY_COLORS.rf.bg, text: CATEGORY_COLORS.rf.text });
           rfPreDays += stdRfPreDays;
         }
         if (stdRfPostDays > 0) {
-          const c = stdRfPostOut ? CATEGORY_COLORS.outsourced : CATEGORY_COLORS.rf;
-          rfPostSegments.push({ label: stdTag + 'RF 後' + (stdRfPostOut ? '(外測)' : ''), days: stdRfPostDays, bg: c.bg, text: c.text });
+          rfPostSegments.push({ label: stdTag + 'RF 後', days: stdRfPostDays, bg: CATEGORY_COLORS.rf.bg, text: CATEGORY_COLORS.rf.text });
           rfPostDays += stdRfPostDays;
         }
         if (stdStorageDays > 0) {
@@ -1145,6 +1144,7 @@ const App: React.FC = () => {
           (list || []).forEach(item => {
             if (!selected[item.id]) return;
             if (!item.outsourced && !overrides[item.id]) return;
+            if (isRfItem(item.name)) return; // RF 不外測，殘留的 override 也不計費
             const existing = byItem.get(item.id);
             if (existing) {
               // 同測項不同型號：同爐測試，費用不重複計，只記錄共用型號
@@ -1507,7 +1507,7 @@ const App: React.FC = () => {
                               {items.map(item => {
                                 const isSelected = activeModel.selectedTests?.[item.id];
                                 const isPkg = item.name.toLowerCase().includes('pkg');
-                                const isOverridden = !!activeModel.outsourcedOverrides?.[item.id];
+                                const isOverridden = !!activeModel.outsourcedOverrides?.[item.id] && !isRfItem(item.name);
                                 const isOut = !!item.outsourced || isOverridden;
                                 const quoteText = item.quotes
                                   ? Object.entries(item.quotes).map(([v, p]) => `${v} NT$${p.toLocaleString()}`).join(' / ')
@@ -1543,8 +1543,9 @@ const App: React.FC = () => {
                                     </div>
 
                                     <div className="absolute top-1/2 -translate-y-1/2 right-12 flex gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity z-10 scale-90">
-                                      {/* 臨時改外測：時程吃緊時即時比較工期與費用；本質外測項目不提供切回 */}
-                                      {!item.outsourced && (
+                                      {/* 臨時改外測：時程吃緊時即時比較工期與費用。
+                                          本質外測項目不提供切回；RF 不提供外測選項 */}
+                                      {!item.outsourced && !isRfItem(item.name) && (
                                         <button
                                           onClick={(e) => { e.stopPropagation(); toggleOutsource(item.id); }}
                                           title={isOverridden ? '改回自測' : '臨時改為外測（前置 2 天 BF，接在 S&V 之後）'}
