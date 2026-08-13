@@ -260,7 +260,7 @@ const App: React.FC = () => {
       const nf = (n: number) => n.toLocaleString();
       const rows = outsourcedCost.items.map(i => `
         <tr>
-          <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;">${i.modelName}</td>
+          <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;">${i.modelNames.join('、')}${i.modelNames.length > 1 ? '<span style="color:#0369a1;"> (同爐共用)</span>' : ''}</td>
           <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;">${i.standardName}</td>
           <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;">${i.name}</td>
           <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;text-align:center;">${i.isInherent ? '本質外測' : '時程外測'}</td>
@@ -307,6 +307,7 @@ const App: React.FC = () => {
             ? `<div style="color:#b91c1c;font-weight:bold;">※ 另有 ${outsourcedCost.unpricedCount} 項未提供報價，未納入上方合計，實際金額將高於此數。</div>`
             : ''}
           <div>※ 單價為內部參考價，非實驗室正式報價；正式金額以各實驗室回覆為準。</div>
+          <div>※ 相同外測項目跨型號可同爐測試，費用僅計一次（標示「同爐共用」者）。</div>
           <div>※ 排程已計入送件前 ${OUTSOURCE_PREP_DAYS} 個工作天的 Basic Function 備機時間（同一台樣品僅計一次）。</div>
         </div>`;
       document.body.appendChild(holder);
@@ -1116,14 +1117,16 @@ const App: React.FC = () => {
 
   // 外測費用估算：彙總已勾選的外測項目各實驗室報價，取最低價作為建議估算
   // 註：外測項目仍計入工期（見計算引擎），此處只負責費用
+  // 同一專案中，相同外測項目跨不同型號可同爐測試，費用只計一次——
+  // 因此以測項 id 去重，並在明細列出共用的型號。
   const outsourcedCost = useMemo(() => {
-    const items: Array<{
-      modelName: string; standardName: string; name: string; duration: number;
+    const byItem = new Map<string, {
+      modelNames: string[]; standardName: string; name: string; duration: number;
       quotes: Record<string, number>;
       vendor: string | null;   // 最低報價的實驗室
       price: number | null;    // 無報價者為 null，不納入合計
       isInherent: boolean;     // true = 本質外測；false = 因時程臨時改外測
-    }> = [];
+    }>();
     models.forEach(model => {
       const selected = model.selectedTests || {};
       const overrides = model.outsourcedOverrides || {};
@@ -1134,14 +1137,20 @@ const App: React.FC = () => {
           (list || []).forEach(item => {
             if (!selected[item.id]) return;
             if (!item.outsourced && !overrides[item.id]) return;
+            const existing = byItem.get(item.id);
+            if (existing) {
+              // 同測項不同型號：同爐測試，費用不重複計，只記錄共用型號
+              if (!existing.modelNames.includes(model.name)) existing.modelNames.push(model.name);
+              return;
+            }
             const quotes = item.quotes || {};
             const entries = Object.entries(quotes);
             // 取最低報價；無報價則留空、不進行估價
             const best = entries.length
               ? entries.reduce((a, b) => (b[1] < a[1] ? b : a))
               : null;
-            items.push({
-              modelName: model.name, standardName: std.name, name: item.name,
+            byItem.set(item.id, {
+              modelNames: [model.name], standardName: std.name, name: item.name,
               duration: item.duration, quotes,
               vendor: best ? best[0] : null,
               price: best ? best[1] : null,
@@ -1151,6 +1160,7 @@ const App: React.FC = () => {
         });
       });
     });
+    const items = Array.from(byItem.values());
     const vendorTotals: Record<string, number> = {};
     items.forEach(({ quotes }) => {
       Object.entries(quotes).forEach(([v, price]) => {
