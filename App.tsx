@@ -307,7 +307,7 @@ const App: React.FC = () => {
             ? `<div style="color:#b91c1c;font-weight:bold;">※ 另有 ${outsourcedCost.unpricedCount} 項未提供報價，未納入上方合計，實際金額將高於此數。</div>`
             : ''}
           <div>※ 單價為內部參考價，非實驗室正式報價；正式金額以各實驗室回覆為準。</div>
-          <div>※ 外測項目已於排程中計入送件前 ${OUTSOURCE_PREP_DAYS} 個工作天的 Basic Function 準備時間。</div>
+          <div>※ 排程已計入送件前 ${OUTSOURCE_PREP_DAYS} 個工作天的 Basic Function 備機時間（同一台樣品僅計一次）。</div>
         </div>`;
       document.body.appendChild(holder);
       await new Promise(requestAnimationFrame);
@@ -637,12 +637,12 @@ const App: React.FC = () => {
               // 外測：不併入任何既有類別，改為獨立成段（BF 2 天前置 + 測項本身），
               // 於下方接在 S&V 之後。仍計入工期，費用另於 outsourcedCost 統計。
               if (item.outsourced || overrideMap[item.id]) {
-                const bfColor = CATEGORY_COLORS[CategoryType.FUNCTION];
+                // 只推入測項本身；BF 前置在下方統一補一次
+                // （同一台樣品送外測，備機只需做一次 Basic Function）
                 outsourcedSegments.push(
-                  { label: 'BF 前置', days: OUTSOURCE_PREP_DAYS, bg: bfColor.bg, text: bfColor.text },
                   { label: stdTag + item.name, days: item.duration, bg: 'bg-amber-500', text: 'text-white' }
                 );
-                outsourcedDays += OUTSOURCE_PREP_DAYS + item.duration;
+                outsourcedDays += item.duration;
                 return;
               }
               const nameLower = item.name.toLowerCase();
@@ -954,6 +954,14 @@ const App: React.FC = () => {
       // Chamber 與 S&V 不共用機台，因此不可掛在 S&V 列上。
       // 每項已自帶 BF 2 天前置（見上方分類迴圈）。
       if (outsourcedSegments.length > 0) {
+        // 統一補一次 BF 前置：同一台樣品送外測，備機只需做一次 Basic Function，
+        // 不論送測幾個項目。
+        const bfColor = CATEGORY_COLORS[CategoryType.FUNCTION];
+        outsourcedSegments.unshift({
+          label: 'BF 前置', days: OUTSOURCE_PREP_DAYS, bg: bfColor.bg, text: bfColor.text,
+        });
+        outsourcedDays += OUTSOURCE_PREP_DAYS;
+
         // 優先掛在真正的 ENV 樣品；Storage 樣品雖同屬 Track A，但專供 Storage 測試，
         // 只有在完全沒有 ENV 樣品時才退而求其次。
         const envOnly = envRows.filter(r => r.trackLabel === 'ENV');
