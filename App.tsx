@@ -576,7 +576,9 @@ const App: React.FC = () => {
     const mechParallelSlots: Record<string, number> = {};
     let mechParallelNextSlot = 0; // 下一個未使用槽位的起始位移
 
-    type Seg = { label: string; days: number; bg: string; text: string; isWait?: boolean };
+    // isRfPost 用來定位「RF 後」段落：外測項目同屬 Chamber 類測試，
+    // 必須插在 RF 後之前，RF 後才會落在所有 Chamber 測試之後。
+    type Seg = { label: string; days: number; bg: string; text: string; isWait?: boolean; isRfPost?: boolean };
     const allDutRows: Array<{
       id: string; modelId?: string; label: string; track: 'A' | 'B' | 'C' | 'D'; trackLabel: string;
       startDay: number; segments: Seg[]; totalDays: number;
@@ -703,7 +705,7 @@ const App: React.FC = () => {
           rfPreDays += stdRfPreDays;
         }
         if (stdRfPostDays > 0) {
-          rfPostSegments.push({ label: stdTag + 'RF 後', days: stdRfPostDays, bg: CATEGORY_COLORS.rf.bg, text: CATEGORY_COLORS.rf.text });
+          rfPostSegments.push({ label: stdTag + 'RF 後', days: stdRfPostDays, bg: CATEGORY_COLORS.rf.bg, text: CATEGORY_COLORS.rf.text, isRfPost: true });
           rfPostDays += stdRfPostDays;
         }
         if (stdStorageDays > 0) {
@@ -978,7 +980,12 @@ const App: React.FC = () => {
           // 外測是整批送出：所有 ENV 樣品都會出貨，因此每一列都要有外測段落，
           // 且每台各自需要一次 BF 備機。
           candidates.forEach(row => {
-            row.segments.push(...outsourcedSegments.map(seg => ({ ...seg })));
+            const clone = outsourcedSegments.map(seg => ({ ...seg }));
+            // 外測屬 Chamber 類測試，須插在「RF 後」之前，
+            // RF 後才會位於所有 Chamber 測試（含外測）之後
+            const rfPostIdx = row.segments.findIndex(s => s.isRfPost);
+            if (rfPostIdx >= 0) row.segments.splice(rfPostIdx, 0, ...clone);
+            else row.segments.push(...clone);
             row.totalDays += outsourcedDays;
           });
         } else {
