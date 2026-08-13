@@ -247,6 +247,92 @@ const App: React.FC = () => {
     }
   };
 
+  // 匯出「外測費用估算表」PDF
+  // 情境：內部 chamber 資源不足需送外測時，把勾選為外測的測項加總成一份可簽核的附件。
+  // 走與甘特圖相同的離畫面擷取管線——jsPDF 內建字型無中文字形，必須靠瀏覽器渲染。
+  const [isExportingQuote, setIsExportingQuote] = useState(false);
+  const handleExportQuote = async () => {
+    if (isExportingQuote || outsourcedCost.count === 0) return;
+    setIsExportingQuote(true);
+    const holder = document.createElement('div');
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const nf = (n: number) => n.toLocaleString();
+      const rows = outsourcedCost.items.map(i => `
+        <tr>
+          <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;">${i.modelName}</td>
+          <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;">${i.standardName}</td>
+          <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;">${i.name}</td>
+          <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;text-align:center;">${i.isInherent ? '本質外測' : '時程外測'}</td>
+          <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;text-align:right;">${i.duration} WD</td>
+          <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;text-align:center;">${i.vendor ?? '—'}</td>
+          <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;text-align:right;">${
+            i.price === null ? '<span style="color:#b91c1c;">未提供報價</span>' : 'NT$' + nf(i.price)
+          }</td>
+        </tr>`).join('');
+      const vendorRows = Object.entries(outsourcedCost.vendorTotals)
+        .map(([v, t]) => `<span style="margin-right:18px;">${v} 全包：NT$${nf(t)}</span>`).join('');
+
+      holder.style.cssText = 'position:fixed;left:-99999px;top:0;background:#fff;padding:36px;width:1040px;font-family:Arial,"Microsoft JhengHei",sans-serif;color:#0f172a;';
+      holder.innerHTML = `
+        <div style="font-size:21px;font-weight:bold;line-height:1.9;">DQA 外測費用估算表</div>
+        <div style="font-size:11px;color:#64748b;line-height:2;">產生日期：${today}　|　估算總工期：${calculationResults.totalDays} WD　|　樣品數量：${calculationResults.totalUnits} sets</div>
+        <table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-top:18px;">
+          <thead>
+            <tr style="background:#f1f5f9;">
+              <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #94a3b8;">型號</th>
+              <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #94a3b8;">標準</th>
+              <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #94a3b8;">測項</th>
+              <th style="padding:8px 10px;text-align:center;border-bottom:2px solid #94a3b8;">類型</th>
+              <th style="padding:8px 10px;text-align:right;border-bottom:2px solid #94a3b8;">天數</th>
+              <th style="padding:8px 10px;text-align:center;border-bottom:2px solid #94a3b8;">實驗室</th>
+              <th style="padding:8px 10px;text-align:right;border-bottom:2px solid #94a3b8;">參考單價</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr>
+              <td colspan="6" style="padding:11px 10px;text-align:right;font-weight:bold;border-top:2px solid #94a3b8;">
+                合計（${outsourcedCost.pricedCount} 項，取各項最低報價）
+              </td>
+              <td style="padding:11px 10px;text-align:right;font-weight:bold;font-size:14px;border-top:2px solid #94a3b8;">
+                NT$${nf(outsourcedCost.lowestTotal)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+        <div style="font-size:10.5px;color:#475569;line-height:2.1;margin-top:14px;">
+          ${vendorRows ? `<div>${vendorRows}</div>` : ''}
+          ${outsourcedCost.unpricedCount > 0
+            ? `<div style="color:#b91c1c;font-weight:bold;">※ 另有 ${outsourcedCost.unpricedCount} 項未提供報價，未納入上方合計，實際金額將高於此數。</div>`
+            : ''}
+          <div>※ 單價為內部參考價，非實驗室正式報價；正式金額以各實驗室回覆為準。</div>
+          <div>※ 外測項目已於排程中計入送件前 ${OUTSOURCE_PREP_DAYS} 個工作天的 Basic Function 準備時間。</div>
+        </div>`;
+      document.body.appendChild(holder);
+      await new Promise(requestAnimationFrame);
+
+      const canvas = await html2canvas(holder, {
+        scale: EXPORT_SCALE, backgroundColor: '#ffffff',
+        width: holder.scrollWidth, height: holder.scrollHeight,
+      });
+      const pageW = canvas.width / EXPORT_SCALE;
+      const pageH = canvas.height / EXPORT_SCALE;
+      const pdf = new jsPDF({
+        orientation: pageW > pageH ? 'landscape' : 'portrait',
+        unit: 'pt', format: [pageW, pageH],
+      });
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pageW, pageH);
+      pdf.save(`DQA外測費用估算表_${today}.pdf`);
+    } catch (err) {
+      console.error('匯出外測估算表失敗', err);
+      alert('匯出外測估算表失敗，請稍後再試。');
+    } finally {
+      if (holder.parentNode) document.body.removeChild(holder);
+      setIsExportingQuote(false);
+    }
+  };
+
   // App 啟動時從 GitHub 載入 Lab TA 佈達的最新測項資料
   // 天數以佈達版為準；本地只保留使用者自訂的測項/類別（見 mergeLocalWithRemote）
   useEffect(() => {
@@ -864,17 +950,24 @@ const App: React.FC = () => {
         }
       }
 
-      // 外測：接在 S&V 之後（每項已自帶 BF 2 天前置）
+      // 外測：送外部實驗室的是 ENV（Chamber）樣品，接在 ENV 之後。
+      // Chamber 與 S&V 不共用機台，因此不可掛在 S&V 列上。
+      // 每項已自帶 BF 2 天前置（見上方分類迴圈）。
       if (outsourcedSegments.length > 0) {
-        if (mechRows.length > 0) {
-          const target = [...mechRows].sort((a, b) => a.totalDays - b.totalDays)[0];
+        // 優先掛在真正的 ENV 樣品；Storage 樣品雖同屬 Track A，但專供 Storage 測試，
+        // 只有在完全沒有 ENV 樣品時才退而求其次。
+        const envOnly = envRows.filter(r => r.trackLabel === 'ENV');
+        const candidates = envOnly.length > 0 ? envOnly : envRows;
+        if (candidates.length > 0) {
+          // 掛在工期最短的樣品，平衡負載並避免拉長關鍵路徑
+          const target = [...candidates].sort((a, b) => a.totalDays - b.totalDays)[0];
           target.segments.push(...outsourcedSegments);
           target.totalDays += outsourcedDays;
         } else {
-          // 沒有 S&V 樣品可接續時，獨立成列，否則外測項目會從甘特圖消失
+          // 沒有 ENV 樣品可接續時，獨立成列，否則外測項目會從甘特圖消失
           modelDuts.push({
             id: `dut_out_${model.id}_${rowCounter}`, modelId: model.id, label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
-            track: 'B', trackLabel: '外測', startDay: baseStartDay, segments: [...outsourcedSegments], totalDays: outsourcedDays,
+            track: 'A', trackLabel: '外測', startDay: baseStartDay, segments: [...outsourcedSegments], totalDays: outsourcedDays,
           });
           rowCounter++;
           outsourcedFallbackUnits = 1;
@@ -1014,7 +1107,13 @@ const App: React.FC = () => {
   // 外測費用估算：彙總已勾選的外測項目各實驗室報價，取最低價作為建議估算
   // 註：外測項目仍計入工期（見計算引擎），此處只負責費用
   const outsourcedCost = useMemo(() => {
-    const items: Array<{ name: string; modelName: string; quotes: Record<string, number> }> = [];
+    const items: Array<{
+      modelName: string; standardName: string; name: string; duration: number;
+      quotes: Record<string, number>;
+      vendor: string | null;   // 最低報價的實驗室
+      price: number | null;    // 無報價者為 null，不納入合計
+      isInherent: boolean;     // true = 本質外測；false = 因時程臨時改外測
+    }> = [];
     models.forEach(model => {
       const selected = model.selectedTests || {};
       const overrides = model.outsourcedOverrides || {};
@@ -1023,23 +1122,38 @@ const App: React.FC = () => {
         if (!std) return;
         Object.values(std.categories).forEach(list => {
           (list || []).forEach(item => {
-            if ((item.outsourced || overrides[item.id]) && selected[item.id]) {
-              items.push({ name: item.name, modelName: model.name, quotes: item.quotes || {} });
-            }
+            if (!selected[item.id]) return;
+            if (!item.outsourced && !overrides[item.id]) return;
+            const quotes = item.quotes || {};
+            const entries = Object.entries(quotes);
+            // 取最低報價；無報價則留空、不進行估價
+            const best = entries.length
+              ? entries.reduce((a, b) => (b[1] < a[1] ? b : a))
+              : null;
+            items.push({
+              modelName: model.name, standardName: std.name, name: item.name,
+              duration: item.duration, quotes,
+              vendor: best ? best[0] : null,
+              price: best ? best[1] : null,
+              isInherent: !!item.outsourced,
+            });
           });
         });
       });
     });
     const vendorTotals: Record<string, number> = {};
-    let lowestTotal = 0;
     items.forEach(({ quotes }) => {
       Object.entries(quotes).forEach(([v, price]) => {
         vendorTotals[v] = (vendorTotals[v] || 0) + price;
       });
-      const vals = Object.values(quotes);
-      if (vals.length) lowestTotal += Math.min(...vals);
     });
-    return { items, vendorTotals, lowestTotal, count: items.length };
+    const priced = items.filter(i => i.price !== null);
+    const unpriced = items.filter(i => i.price === null);
+    const lowestTotal = priced.reduce((sum, i) => sum + (i.price || 0), 0);
+    return {
+      items, vendorTotals, lowestTotal, count: items.length,
+      pricedCount: priced.length, unpricedCount: unpriced.length, unpriced,
+    };
   }, [standards, models]);
 
   return (
@@ -1152,6 +1266,17 @@ const App: React.FC = () => {
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H8a2 2 0 01-2-2V5a2 2 0 012-2h6l6 6v9a2 2 0 01-2 2z" /></svg>
                       {isExporting ? '匯出中...' : '匯出 PDF'}
                     </button>
+                    {outsourcedCost.count > 0 && (
+                      <button
+                        onClick={handleExportQuote}
+                        disabled={isExportingQuote}
+                        className="no-print px-3 py-1.5 text-[9px] font-bold uppercase rounded-md bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 transition-all flex items-center gap-1.5"
+                        title="將勾選為外測的測項加總，匯出可簽核的費用估算表"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        {isExportingQuote ? '匯出中...' : '外測估算表'}
+                      </button>
+                    )}
                   </div>
                   <div className="flex gap-4 text-[9px] font-bold text-slate-400 uppercase">
                     <span>A: <span className="text-indigo-600 tabular-nums">{calculationResults.trackATotal}D</span></span>
@@ -1251,6 +1376,11 @@ const App: React.FC = () => {
                       ))}
                     </div>
                     <p className="text-[8px] text-slate-300 mt-0.5">取各項最低報價估算</p>
+                    {outsourcedCost.unpricedCount > 0 && (
+                      <p className="text-[8px] text-rose-500 font-bold">
+                        另有 {outsourcedCost.unpricedCount} 項無報價，未計入
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
