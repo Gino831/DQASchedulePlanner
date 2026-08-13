@@ -967,10 +967,12 @@ const App: React.FC = () => {
         const envOnly = envRows.filter(r => r.trackLabel === 'ENV');
         const candidates = envOnly.length > 0 ? envOnly : envRows;
         if (candidates.length > 0) {
-          // 掛在工期最短的樣品，平衡負載並避免拉長關鍵路徑
-          const target = [...candidates].sort((a, b) => a.totalDays - b.totalDays)[0];
-          target.segments.push(...outsourcedSegments);
-          target.totalDays += outsourcedDays;
+          // 外測是整批送出：所有 ENV 樣品都會出貨，因此每一列都要有外測段落，
+          // 且每台各自需要一次 BF 備機。
+          candidates.forEach(row => {
+            row.segments.push(...outsourcedSegments.map(seg => ({ ...seg })));
+            row.totalDays += outsourcedDays;
+          });
         } else {
           // 沒有 ENV 樣品可接續時，獨立成列，否則外測項目會從甘特圖消失
           modelDuts.push({
