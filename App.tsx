@@ -626,6 +626,9 @@ const App: React.FC = () => {
         let stdAltDays = 0;
         let stdRfPreDays = 0;
         let stdRfPostDays = 0;
+        // RF 走外測時位置不變，僅標色與標註區隔
+        let stdRfPreOut = false;
+        let stdRfPostOut = false;
 
         let stdIpDays = 0;
         let stdMechDays = 0;
@@ -635,17 +638,6 @@ const App: React.FC = () => {
           const catType = cat as CategoryType;
           (items as any[] | undefined)?.forEach(item => {
             if (selectedMap[item.id]) {
-              // 外測：不併入任何既有類別，改為獨立成段（BF 2 天前置 + 測項本身），
-              // 於下方接在 S&V 之後。仍計入工期，費用另於 outsourcedCost 統計。
-              if (item.outsourced || overrideMap[item.id]) {
-                // 只推入測項本身；BF 前置在下方統一補一次
-                // （同一台樣品送外測，備機只需做一次 Basic Function）
-                outsourcedSegments.push(
-                  { label: stdTag + item.name, days: item.duration, bg: 'bg-amber-500', text: 'text-white' }
-                );
-                outsourcedDays += item.duration;
-                return;
-              }
               const nameLower = item.name.toLowerCase();
               const isPkg = nameLower.includes('pkg') || nameLower.includes('包裝');
               const isStorage = nameLower.includes('storage');
@@ -657,11 +649,25 @@ const App: React.FC = () => {
               const isRf = nameLower.includes('rf performance') || nameLower.includes('rf test');
               const isRfPost = isRf && (item.name.includes('後') || nameLower.includes('post') || nameLower.includes('after'));
               const isRfPre = isRf && !isRfPost;
+              const isOutsourced = !!item.outsourced || !!overrideMap[item.id];
+
+              // 外測：不併入既有類別，改為獨立成段接在 ENV 之後（BF 前置於下方統一補一次）。
+              // 但 RF 前/後的位置由測試流程決定（BF 之前 / Chamber 之後），
+              // 即使改走外測也不改變排程位置，只在費用上計為外測。
+              if (isOutsourced && !isRf) {
+                outsourcedSegments.push(
+                  { label: stdTag + item.name, days: item.duration, bg: 'bg-amber-500', text: 'text-white' }
+                );
+                outsourcedDays += item.duration;
+                return;
+              }
 
               if (isRfPre) {
                 stdRfPreDays += item.duration;
+                if (isOutsourced) stdRfPreOut = true;
               } else if (isRfPost) {
                 stdRfPostDays += item.duration;
+                if (isOutsourced) stdRfPostOut = true;
               } else if (isPkg && isBF) {
                 pkgBfDays = Math.max(pkgBfDays, item.duration);
               } else if (isBF) {
@@ -692,11 +698,13 @@ const App: React.FC = () => {
           envBaseDays += stdEnvDays;
         }
         if (stdRfPreDays > 0) {
-          rfPreSegments.push({ label: stdTag + 'RF 前', days: stdRfPreDays, bg: CATEGORY_COLORS.rf.bg, text: CATEGORY_COLORS.rf.text });
+          const c = stdRfPreOut ? CATEGORY_COLORS.outsourced : CATEGORY_COLORS.rf;
+          rfPreSegments.push({ label: stdTag + 'RF 前' + (stdRfPreOut ? '(外測)' : ''), days: stdRfPreDays, bg: c.bg, text: c.text });
           rfPreDays += stdRfPreDays;
         }
         if (stdRfPostDays > 0) {
-          rfPostSegments.push({ label: stdTag + 'RF 後', days: stdRfPostDays, bg: CATEGORY_COLORS.rf.bg, text: CATEGORY_COLORS.rf.text });
+          const c = stdRfPostOut ? CATEGORY_COLORS.outsourced : CATEGORY_COLORS.rf;
+          rfPostSegments.push({ label: stdTag + 'RF 後' + (stdRfPostOut ? '(外測)' : ''), days: stdRfPostDays, bg: c.bg, text: c.text });
           rfPostDays += stdRfPostDays;
         }
         if (stdStorageDays > 0) {
