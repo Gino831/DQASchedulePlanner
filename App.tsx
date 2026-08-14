@@ -112,6 +112,9 @@ const APP_COLORS: Record<string, string> = {
 // 外測送件前的 Basic Function 準備天數
 const OUTSOURCE_PREP_DAYS = 2;
 
+// Marine 的 S&V 只能串聯執行（樣品尺寸/夾治具限制），不受型號的並聯設定影響
+const isSerialOnlyMechStandard = (standardId?: string) => !!standardId && standardId.startsWith('marine');
+
 // RF Performance Test 不提供外測選項（由 RF 測試工程師執行，不送外部實驗室）
 // 排程、費用、UI 三處共用此判定，確保殘留的 override 也不會生效
 const isRfItem = (name: string) => {
@@ -576,10 +579,6 @@ const App: React.FC = () => {
     const allPkgTasks: any[] = [];
 
     // S&V 並行模式：全局設備時間槽排程
-    // 相同應用跨型號可共用設備（並行），不同應用必須依序（設備只能設定一種條件）
-    // key = 應用 ID, value = 該應用的設備時間槽位移（相對於 BF 結束後的天數）
-    const mechParallelSlots: Record<string, number> = {};
-    let mechParallelNextSlot = 0; // 下一個未使用槽位的起始位移
 
     // isRfPost 用來定位「RF 後」段落：外測項目同屬 Chamber 類測試，
     // 必須插在 RF 後之前，RF 後才會落在所有 Chamber 測試之後。
@@ -745,19 +744,6 @@ const App: React.FC = () => {
       });
 
       const activeMechStds = mechSegsPerStd.filter(s => s.days > 0);
-      const mechBins = Array.from({ length: Math.max(1, model.mechSampleCount) }, (_, i) => {
-        if (activeMechStds.length === 0) return { segments: [], totalDays: 0 };
-        if (model.mechStrategy === ExecutionStrategy.SERIAL) {
-          // 串聯模式：一個 DUT 只執行一種應用的 S&V（共用設備，DUT 間依序執行）
-          const stdData = activeMechStds[i % activeMechStds.length];
-          return { segments: [...stdData.segs], totalDays: stdData.days };
-        } else {
-          // 並聯模式：一台樣品只執行一種應用的 S&V（round-robin 分配）
-          // 相同應用的不同型號可共用設備、時程對齊
-          const stdData = activeMechStds[i % activeMechStds.length];
-          return { segments: [...stdData.segs], totalDays: stdData.days };
-        }
-      });
 
       // --- 建立共用 DUT Rows（樣品共用，所有標準在同一 DUT 行上依序排列）---
       const appendEnvBF = () => envBfDays > 0 ? [{ label: CATEGORY_COLORS[CategoryType.FUNCTION]?.label || 'Basic Func', days: envBfDays, bg: CATEGORY_COLORS[CategoryType.FUNCTION]?.bg || 'bg-sky-100', text: CATEGORY_COLORS[CategoryType.FUNCTION]?.text || 'text-sky-600' }] : [];
@@ -820,106 +806,74 @@ const App: React.FC = () => {
         rowCounter++;
       }
 
-      // 3. Track B (S&V) — 依型號策略決定並聯或串聯
+      // 3. Track B (S&V) — 每個標準各自配置 mechSampleCount 台樣品，標準之間接續執行
+      // （振動台一次只能設定一種條件，故不同標準無法同時進行）。
+      // 標準內部的並/串聯依型號設定，但 Marine 一律串聯。
       const mechRows: any[] = [];
       if (model.mechSampleCount > 0 && (mechSegments.length > 0 || mechBfDays > 0)) {
-        if (model.mechStrategy === ExecutionStrategy.SERIAL) {
-          // 串聯模式：跨型號全局接續執行 
-          let equipmentStartDay = Math.max(baseStartDay + mechBfDays, globalLastMechEndDay);
-          for (let i = 0; i < model.mechSampleCount; i++) {
-            const bin = mechBins[i];
-            const segments = [];
-            if (mechBfDays > 0) {
-              segments.push({
-                label: CATEGORY_COLORS[CategoryType.FUNCTION]?.label || 'Basic Func',
-                days: mechBfDays,
-                bg: CATEGORY_COLORS[CategoryType.FUNCTION]?.bg || 'bg-sky-100',
-                text: CATEGORY_COLORS[CategoryType.FUNCTION]?.text || 'text-sky-600',
-                forceStartDay: baseStartDay
-              });
-            }
+        const sampleCount = Math.max(1, model.mechSampleCount);
+        const mechBfSeg = (): Seg[] => mechBfDays > 0 ? [{
+          label: CATEGORY_COLORS[CategoryType.FUNCTION]?.label || 'Basic Func',
+          days: mechBfDays,
+          bg: CATEGORY_COLORS[CategoryType.FUNCTION]?.bg || 'bg-sky-100',
+          text: CATEGORY_COLORS[CategoryType.FUNCTION]?.text || 'text-sky-600',
+        }] : [];
 
-            let startDelay = equipmentStartDay - (baseStartDay + mechBfDays);
-            if (startDelay > 0 && bin.segments.length > 0) {
-              segments.push({
-                label: '等候機台',
-                days: startDelay,
-                bg: 'bg-transparent border-t border-b border-dashed border-slate-300',
-                text: 'text-slate-400 italic',
-                isWait: true
-              });
-            }
+        // 設備時間軸起點：接續前一個型號，避免跨型號搶同一台振動台
+        let blockStart = Math.max(baseStartDay + mechBfDays, globalLastMechEndDay);
 
-            segments.push(...bin.segments);
-
+        if (activeMechStds.length === 0) {
+          // 只有 BF 沒有 S&V 測項時，仍配置樣品以呈現 BF
+          for (let i = 0; i < sampleCount; i++) {
             const row = {
-              id: `dut_mech_${model.id}_${rowCounter}`,
+              id: `dut_mech_${model.id}_${rowCounter}`, modelId: model.id,
               label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
-              track: 'B',
-              trackLabel: 'S&V',
-              startDay: baseStartDay,
-              segments: segments,
-              totalDays: mechBfDays + (bin.segments.length > 0 ? (startDelay + bin.totalDays) : 0),
+              track: 'B', trackLabel: 'S&V', startDay: baseStartDay,
+              segments: mechBfSeg(), totalDays: mechBfDays,
             };
-            mechRows.push(row);
-            modelDuts.push(row);
-            rowCounter++;
-            equipmentStartDay += bin.totalDays;
+            mechRows.push(row); modelDuts.push(row); rowCounter++;
           }
-          globalLastMechEndDay = equipmentStartDay;
         } else {
-          // 並聯模式：一台樣品只執行一種應用的 S&V
-          // 相同應用跨型號共用設備（並行），不同應用依序（設備一次只能設定一種條件）
-          for (let i = 0; i < model.mechSampleCount; i++) {
-            const bin = mechBins[i];
-            const stdData = activeMechStds[i % activeMechStds.length];
-            const appId = stdData?.standardId || '';
+          activeMechStds.forEach(stdData => {
+            const serialOnly = isSerialOnlyMechStandard(stdData.standardId);
+            const effStrategy = serialOnly
+              ? ExecutionStrategy.SERIAL
+              : (model.mechStrategy || ExecutionStrategy.PARALLEL);
 
-            // 分配全局設備時間槽：首次遇到的應用取得下一個可用槽位
-            if (appId && mechParallelSlots[appId] === undefined) {
-              mechParallelSlots[appId] = mechParallelNextSlot;
-              mechParallelNextSlot += bin.totalDays;
+            for (let i = 0; i < sampleCount; i++) {
+              // 串聯：同標準的樣品逐台接續；並聯：同標準的樣品同時開始
+              const startOffset = effStrategy === ExecutionStrategy.SERIAL
+                ? blockStart + i * stdData.days
+                : blockStart;
+              const wait = startOffset - (baseStartDay + mechBfDays);
+
+              const segments: Seg[] = [...mechBfSeg()];
+              if (wait > 0) {
+                segments.push({
+                  label: '等候機台', days: wait,
+                  bg: 'bg-transparent border-t border-b border-dashed border-slate-300',
+                  text: 'text-slate-400 italic', isWait: true,
+                });
+              }
+              segments.push(...stdData.segs);
+
+              const row = {
+                id: `dut_mech_${model.id}_${rowCounter}`, modelId: model.id,
+                label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+                track: 'B', trackLabel: 'S&V', startDay: baseStartDay,
+                segments,
+                totalDays: mechBfDays + Math.max(0, wait) + stdData.days,
+              };
+              mechRows.push(row); modelDuts.push(row); rowCounter++;
             }
 
-            const slotOffset = appId ? (mechParallelSlots[appId] || 0) : 0;
-
-            const segments: Seg[] = [];
-            // BF 基本功能測試
-            if (mechBfDays > 0) {
-              segments.push({
-                label: CATEGORY_COLORS[CategoryType.FUNCTION]?.label || 'Basic Func',
-                days: mechBfDays,
-                bg: CATEGORY_COLORS[CategoryType.FUNCTION]?.bg || 'bg-sky-100',
-                text: CATEGORY_COLORS[CategoryType.FUNCTION]?.text || 'text-sky-600',
-              });
-            }
-            // 等候機台：不同應用需等候設備切換條件
-            if (slotOffset > 0 && bin.segments.length > 0) {
-              segments.push({
-                label: '等候機台',
-                days: slotOffset,
-                bg: 'bg-transparent border-t border-b border-dashed border-slate-300',
-                text: 'text-slate-400 italic',
-                isWait: true
-              });
-            }
-            segments.push(...bin.segments);
-
-            const row = {
-              id: `dut_mech_${model.id}_${rowCounter}`,
-              modelId: model.id,
-              label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
-              track: 'B',
-              trackLabel: 'S&V',
-              startDay: baseStartDay,
-              segments,
-              totalDays: mechBfDays + (bin.segments.length > 0 ? (slotOffset + bin.totalDays) : 0),
-            };
-            mechRows.push(row);
-            modelDuts.push(row);
-            rowCounter++;
-          }
+            // 下一個標準接在本標準全部做完之後
+            blockStart += effStrategy === ExecutionStrategy.SERIAL
+              ? sampleCount * stdData.days
+              : stdData.days;
+          });
         }
+        globalLastMechEndDay = blockStart;
       }
 
       // 4. 智慧負載平衡
