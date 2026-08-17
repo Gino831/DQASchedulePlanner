@@ -1187,6 +1187,31 @@ const App: React.FC = () => {
     };
   }, [standards, models, shareChamber]);
 
+  // S&V 樣品數不足偵測：樣品總數在各法規之間平均分配，
+  // 若總數少於有 S&V 測項的法規數，排在後面的法規會分到 0 台、S&V 不會被排入甘特圖。
+  // 這種漏失在畫面上看不出來，因此明確警示。
+  const mechShortfall = useMemo(() => {
+    if (!activeModel) return null;
+    const selected = activeModel.selectedTests || {};
+    const overrides = activeModel.outsourcedOverrides || {};
+    const withMech = (activeModel.standardIds || [])
+      .map(id => standards.find(s => s.id === id))
+      .filter((s): s is StandardData => !!s)
+      .filter(std => (std.categories[CategoryType.VIB_SHOCK] || []).some(it => {
+        if (!selected[it.id]) return false;
+        const n = it.name.toLowerCase();
+        if (n.includes('basic function') || it.name.includes('基本功能')) return false;
+        if (n.includes('pkg') || it.name.includes('包裝')) return false;
+        if (isRfItem(it.name)) return false;
+        if (it.outsourced || overrides[it.id]) return false;
+        return true;
+      }));
+    const need = withMech.length;
+    const have = activeModel.mechSampleCount;
+    if (need <= have) return null;
+    return { need, have, missing: withMech.slice(have).map(s => s.name) };
+  }, [standards, activeModel]);
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row text-slate-800 font-sans">
 
@@ -1617,6 +1642,23 @@ const App: React.FC = () => {
                             <button onClick={() => updateActiveModel(prev => ({ mechSampleCount: prev.mechSampleCount + 1 }))} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
                           </div>
                         </div>
+                        {/* 樣品數少於法規數時，後面的法規會分到 0 台、S&V 不會排入 */}
+                        {mechShortfall && (
+                          <div className="rounded-xl p-3 bg-rose-500/10 border border-rose-500/30">
+                            <p className="text-[10px] font-bold text-rose-400 leading-snug">
+                              ⚠ 樣品數不足：有 {mechShortfall.need} 個法規需要 S&V，目前僅 {mechShortfall.have} 台
+                            </p>
+                            <p className="text-[9px] text-rose-300/80 mt-1 leading-snug">
+                              以下法規的 S&V 未排入甘特圖：{mechShortfall.missing.join('、')}
+                            </p>
+                            <button
+                              onClick={() => updateActiveModel(() => ({ mechSampleCount: mechShortfall.need }))}
+                              className="mt-2 w-full py-1.5 rounded-lg bg-rose-500/20 text-rose-300 text-[9px] font-bold hover:bg-rose-500/30 transition-colors"
+                            >
+                              調整為 {mechShortfall.need} 台
+                            </button>
+                          </div>
+                        )}
                         {/* 振動台一次可同時安裝的樣品數；串聯時固定一台一輪，故不生效 */}
                         <div className={`flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10 ${activeModel.mechStrategy === ExecutionStrategy.SERIAL ? 'opacity-40' : ''}`}>
                           <span className="text-[10px] font-bold text-slate-400">S&V 同時可安裝</span>
