@@ -50,6 +50,9 @@ export interface ModelEntry {
   // 與 TestItem.outsourced（Lab TA 佈達的本質屬性）分開存放，不影響基準資料。
   outsourcedOverrides?: Record<string, boolean>;
   mechStrategy?: ExecutionStrategy; // S&V 執行策略
+  // S&V 振動台一次可同時安裝的樣品數。並聯時決定要跑幾輪：
+  // 輪數 = ceil(該法規樣品數 / 可安裝數)。串聯時固定一台一輪，此值不生效。
+  mechFixtureCapacity?: number;
   ipStrategy?: ExecutionStrategy; // IP 執行策略：並聯=獨立樣品(前置 BF)、串聯=接在 S&V 之後
 }
 

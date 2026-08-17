@@ -85,6 +85,7 @@ const createDefaultModel = (standards: StandardData[], initialStandardIds: strin
     pkgSampleCount: 1,
     ipSampleCount: 1,
     mechStrategy: ExecutionStrategy.PARALLEL,
+    mechFixtureCapacity: 2,
     ipStrategy: ExecutionStrategy.SERIAL
   };
 };
@@ -378,6 +379,7 @@ const App: React.FC = () => {
             ...m,
             standardIds: m.standardIds || (m.standardId ? [m.standardId] : ['moxa']),
             mechStrategy: m.mechStrategy || ExecutionStrategy.PARALLEL,
+            mechFixtureCapacity: m.mechFixtureCapacity ?? 2,
             // 舊版資料無 IP 欄位，補預設值（串聯＝沿用既有 S&V 樣品，與舊行為最接近）
             ipSampleCount: m.ipSampleCount ?? 1,
             ipStrategy: m.ipStrategy || ExecutionStrategy.SERIAL,
@@ -806,12 +808,13 @@ const App: React.FC = () => {
         rowCounter++;
       }
 
-      // 3. Track B (S&V) — 每個標準各自配置 mechSampleCount 台樣品，標準之間接續執行
-      // （振動台一次只能設定一種條件，故不同標準無法同時進行）。
-      // 標準內部的並/串聯依型號設定，但 Marine 一律串聯。
+      // 3. Track B (S&V) — 樣品總數依法規平均分配（各半），法規之間接續執行
+      // （振動台一次只能設定一種條件）。各法規內部：
+      //   串聯 = 一台一輪；並聯 = 依「同時可安裝台數」分輪，輪數 = ceil(台數 / 可安裝數)。
+      // Marine 一律串聯。
       const mechRows: any[] = [];
       if (model.mechSampleCount > 0 && (mechSegments.length > 0 || mechBfDays > 0)) {
-        const sampleCount = Math.max(1, model.mechSampleCount);
+        const totalMech = Math.max(1, model.mechSampleCount);
         const mechBfSeg = (): Seg[] => mechBfDays > 0 ? [{
           label: CATEGORY_COLORS[CategoryType.FUNCTION]?.label || 'Basic Func',
           days: mechBfDays,
@@ -819,32 +822,44 @@ const App: React.FC = () => {
           text: CATEGORY_COLORS[CategoryType.FUNCTION]?.text || 'text-sky-600',
         }] : [];
 
+        const pushMechRow = (segments: Seg[], totalDays: number) => {
+          const row = {
+            id: `dut_mech_${model.id}_${rowCounter}`, modelId: model.id,
+            label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
+            track: 'B', trackLabel: 'S&V', startDay: baseStartDay,
+            segments, totalDays,
+          };
+          mechRows.push(row); modelDuts.push(row); rowCounter++;
+        };
+
         // 設備時間軸起點：接續前一個型號，避免跨型號搶同一台振動台
         let blockStart = Math.max(baseStartDay + mechBfDays, globalLastMechEndDay);
 
         if (activeMechStds.length === 0) {
           // 只有 BF 沒有 S&V 測項時，仍配置樣品以呈現 BF
-          for (let i = 0; i < sampleCount; i++) {
-            const row = {
-              id: `dut_mech_${model.id}_${rowCounter}`, modelId: model.id,
-              label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
-              track: 'B', trackLabel: 'S&V', startDay: baseStartDay,
-              segments: mechBfSeg(), totalDays: mechBfDays,
-            };
-            mechRows.push(row); modelDuts.push(row); rowCounter++;
-          }
+          for (let i = 0; i < totalMech; i++) pushMechRow(mechBfSeg(), mechBfDays);
         } else {
-          activeMechStds.forEach(stdData => {
+          const n = activeMechStds.length;
+          // 各半分配；除不盡時餘數優先分給前面的法規
+          const perStd = activeMechStds.map((_, idx) =>
+            Math.floor(totalMech / n) + (idx < totalMech % n ? 1 : 0));
+
+          activeMechStds.forEach((stdData, sIdx) => {
+            const count = perStd[sIdx];
+            if (count <= 0) return;
             const serialOnly = isSerialOnlyMechStandard(stdData.standardId);
             const effStrategy = serialOnly
               ? ExecutionStrategy.SERIAL
               : (model.mechStrategy || ExecutionStrategy.PARALLEL);
+            // 串聯＝一台一輪；並聯＝一輪可同時安裝 capacity 台
+            const capacity = effStrategy === ExecutionStrategy.SERIAL
+              ? 1
+              : Math.max(1, model.mechFixtureCapacity ?? 2);
+            const rounds = Math.ceil(count / capacity);
 
-            for (let i = 0; i < sampleCount; i++) {
-              // 串聯：同標準的樣品逐台接續；並聯：同標準的樣品同時開始
-              const startOffset = effStrategy === ExecutionStrategy.SERIAL
-                ? blockStart + i * stdData.days
-                : blockStart;
+            for (let i = 0; i < count; i++) {
+              const round = Math.floor(i / capacity);
+              const startOffset = blockStart + round * stdData.days;
               const wait = startOffset - (baseStartDay + mechBfDays);
 
               const segments: Seg[] = [...mechBfSeg()];
@@ -856,21 +871,11 @@ const App: React.FC = () => {
                 });
               }
               segments.push(...stdData.segs);
-
-              const row = {
-                id: `dut_mech_${model.id}_${rowCounter}`, modelId: model.id,
-                label: `DUT ${String(rowCounter).padStart(2, '0')} - ${model.name}`,
-                track: 'B', trackLabel: 'S&V', startDay: baseStartDay,
-                segments,
-                totalDays: mechBfDays + Math.max(0, wait) + stdData.days,
-              };
-              mechRows.push(row); modelDuts.push(row); rowCounter++;
+              pushMechRow(segments, mechBfDays + Math.max(0, wait) + stdData.days);
             }
 
-            // 下一個標準接在本標準全部做完之後
-            blockStart += effStrategy === ExecutionStrategy.SERIAL
-              ? sampleCount * stdData.days
-              : stdData.days;
+            // 下一個法規接在本法規所有輪次做完之後
+            blockStart += rounds * stdData.days;
           });
         }
         globalLastMechEndDay = blockStart;
@@ -1574,6 +1579,21 @@ const App: React.FC = () => {
                             <button onClick={() => updateActiveModel({ mechSampleCount: Math.max(0, activeModel.mechSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
                             <span className="w-4 text-center font-bold tabular-nums">{activeModel.mechSampleCount}</span>
                             <button onClick={() => updateActiveModel({ mechSampleCount: activeModel.mechSampleCount + 1 })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
+                          </div>
+                        </div>
+                        {/* 振動台一次可同時安裝的樣品數；串聯時固定一台一輪，故不生效 */}
+                        <div className={`flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10 ${activeModel.mechStrategy === ExecutionStrategy.SERIAL ? 'opacity-40' : ''}`}>
+                          <span className="text-[10px] font-bold text-slate-400">S&V 同時可安裝</span>
+                          <div className="flex items-center gap-3">
+                            <button
+                              disabled={activeModel.mechStrategy === ExecutionStrategy.SERIAL}
+                              onClick={() => updateActiveModel({ mechFixtureCapacity: Math.max(1, (activeModel.mechFixtureCapacity ?? 2) - 1) })}
+                              className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 disabled:hover:bg-white/5 disabled:cursor-not-allowed transition-all">-</button>
+                            <span className="w-4 text-center font-bold tabular-nums">{activeModel.mechFixtureCapacity ?? 2}</span>
+                            <button
+                              disabled={activeModel.mechStrategy === ExecutionStrategy.SERIAL}
+                              onClick={() => updateActiveModel({ mechFixtureCapacity: (activeModel.mechFixtureCapacity ?? 2) + 1 })}
+                              className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 disabled:hover:bg-white/5 disabled:cursor-not-allowed transition-all">+</button>
                           </div>
                         </div>
                         <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
