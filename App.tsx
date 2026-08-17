@@ -1593,18 +1593,18 @@ const App: React.FC = () => {
                         <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
                           <span className="text-[10px] font-bold text-slate-400">Chamber 樣品數量</span>
                           <div className="flex items-center gap-3">
-                            <button onClick={() => updateActiveModel({ envSampleCount: Math.max(1, activeModel.envSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
+                            <button onClick={() => updateActiveModel(prev => ({ envSampleCount: Math.max(1, prev.envSampleCount - 1) }))} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
                             <span className="w-4 text-center font-bold tabular-nums">{activeModel.envSampleCount}</span>
-                            <button onClick={() => updateActiveModel({ envSampleCount: activeModel.envSampleCount + 1 })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
+                            <button onClick={() => updateActiveModel(prev => ({ envSampleCount: prev.envSampleCount + 1 }))} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
                           </div>
                         </div>
 
                         <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
                           <span className="text-[10px] font-bold text-slate-400">S&V 樣品數量</span>
                           <div className="flex items-center gap-3">
-                            <button onClick={() => updateActiveModel({ mechSampleCount: Math.max(0, activeModel.mechSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
+                            <button onClick={() => updateActiveModel(prev => ({ mechSampleCount: Math.max(0, prev.mechSampleCount - 1) }))} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
                             <span className="w-4 text-center font-bold tabular-nums">{activeModel.mechSampleCount}</span>
-                            <button onClick={() => updateActiveModel({ mechSampleCount: activeModel.mechSampleCount + 1 })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
+                            <button onClick={() => updateActiveModel(prev => ({ mechSampleCount: prev.mechSampleCount + 1 }))} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
                           </div>
                         </div>
                         {/* 振動台一次可同時安裝的樣品數；串聯時固定一台一輪，故不生效 */}
@@ -1613,21 +1613,21 @@ const App: React.FC = () => {
                           <div className="flex items-center gap-3">
                             <button
                               disabled={activeModel.mechStrategy === ExecutionStrategy.SERIAL}
-                              onClick={() => updateActiveModel({ mechFixtureCapacity: Math.max(1, (activeModel.mechFixtureCapacity ?? 2) - 1) })}
+                              onClick={() => updateActiveModel(prev => ({ mechFixtureCapacity: Math.max(1, (prev.mechFixtureCapacity ?? 2) - 1) }))}
                               className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 disabled:hover:bg-white/5 disabled:cursor-not-allowed transition-all">-</button>
                             <span className="w-4 text-center font-bold tabular-nums">{activeModel.mechFixtureCapacity ?? 2}</span>
                             <button
                               disabled={activeModel.mechStrategy === ExecutionStrategy.SERIAL}
-                              onClick={() => updateActiveModel({ mechFixtureCapacity: (activeModel.mechFixtureCapacity ?? 2) + 1 })}
+                              onClick={() => updateActiveModel(prev => ({ mechFixtureCapacity: (prev.mechFixtureCapacity ?? 2) + 1 }))}
                               className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 disabled:hover:bg-white/5 disabled:cursor-not-allowed transition-all">+</button>
                           </div>
                         </div>
                         <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
                           <span className="text-[10px] font-bold text-slate-400">[包裝/PKG] 樣品需求</span>
                           <div className="flex items-center gap-3">
-                            <button onClick={() => updateActiveModel({ pkgSampleCount: Math.max(0, activeModel.pkgSampleCount - 1) })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
+                            <button onClick={() => updateActiveModel(prev => ({ pkgSampleCount: Math.max(0, prev.pkgSampleCount - 1) }))} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
                             <span className="w-4 text-center font-bold tabular-nums">{activeModel.pkgSampleCount}</span>
-                            <button onClick={() => updateActiveModel({ pkgSampleCount: activeModel.pkgSampleCount + 1 })} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
+                            <button onClick={() => updateActiveModel(prev => ({ pkgSampleCount: prev.pkgSampleCount + 1 }))} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
                           </div>
                         </div>
                         {/* IP 樣品數量：僅並聯（獨立樣品）模式有作用，串聯時沿用 S&V 樣品 */}
@@ -1636,12 +1636,12 @@ const App: React.FC = () => {
                           <div className="flex items-center gap-3">
                             <button
                               disabled={activeModel.ipStrategy !== ExecutionStrategy.PARALLEL}
-                              onClick={() => updateActiveModel({ ipSampleCount: Math.max(1, (activeModel.ipSampleCount ?? 1) - 1) })}
+                              onClick={() => updateActiveModel(prev => ({ ipSampleCount: Math.max(1, (prev.ipSampleCount ?? 1) - 1) }))}
                               className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 disabled:hover:bg-white/5 disabled:cursor-not-allowed transition-all">-</button>
                             <span className="w-4 text-center font-bold tabular-nums">{activeModel.ipSampleCount ?? 1}</span>
                             <button
                               disabled={activeModel.ipStrategy !== ExecutionStrategy.PARALLEL}
-                              onClick={() => updateActiveModel({ ipSampleCount: (activeModel.ipSampleCount ?? 1) + 1 })}
+                              onClick={() => updateActiveModel(prev => ({ ipSampleCount: (prev.ipSampleCount ?? 1) + 1 }))}
                               className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 disabled:hover:bg-white/5 disabled:cursor-not-allowed transition-all">+</button>
                           </div>
                         </div>
@@ -1821,9 +1821,9 @@ const App: React.FC = () => {
                 <div className="flex-1 flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
                   <span className="text-[10px] font-bold text-slate-400">Track A</span>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => updateActiveModel({ envSampleCount: Math.max(1, activeModel.envSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
+                    <button onClick={() => updateActiveModel(prev => ({ envSampleCount: Math.max(1, prev.envSampleCount - 1) }))} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
                     <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.envSampleCount}</span>
-                    <button onClick={() => updateActiveModel({ envSampleCount: activeModel.envSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
+                    <button onClick={() => updateActiveModel(prev => ({ envSampleCount: prev.envSampleCount + 1 }))} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
                   </div>
                 </div>
               </div>
@@ -1831,18 +1831,18 @@ const App: React.FC = () => {
                 <div className="flex-1 flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
                   <span className="text-[10px] font-bold text-slate-400">Track B</span>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => updateActiveModel({ mechSampleCount: Math.max(0, activeModel.mechSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
+                    <button onClick={() => updateActiveModel(prev => ({ mechSampleCount: Math.max(0, prev.mechSampleCount - 1) }))} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
                     <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.mechSampleCount}</span>
-                    <button onClick={() => updateActiveModel({ mechSampleCount: activeModel.mechSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
+                    <button onClick={() => updateActiveModel(prev => ({ mechSampleCount: prev.mechSampleCount + 1 }))} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
                   </div>
                 </div>
               </div>
               <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10 mt-2">
                 <span className="text-[10px] font-bold text-slate-400">[包裝/PKG] 樣品需求</span>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => updateActiveModel({ pkgSampleCount: Math.max(1, activeModel.pkgSampleCount - 1) })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
+                  <button onClick={() => updateActiveModel(prev => ({ pkgSampleCount: Math.max(1, prev.pkgSampleCount - 1) }))} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">-</button>
                   <span className="w-5 text-center font-bold tabular-nums text-white">{activeModel.pkgSampleCount}</span>
-                  <button onClick={() => updateActiveModel({ pkgSampleCount: activeModel.pkgSampleCount + 1 })} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
+                  <button onClick={() => updateActiveModel(prev => ({ pkgSampleCount: prev.pkgSampleCount + 1 }))} className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold active:bg-white/20">+</button>
                 </div>
               </div>
             </div>
