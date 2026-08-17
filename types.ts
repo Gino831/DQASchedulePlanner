@@ -14,7 +14,8 @@ export interface TestItem {
   duration: number; // 工作天 (WD)；外測項目為 0，不佔用自有工期
   category: CategoryType;
   outsourced?: boolean; // 外測：不佔用自有設備工期，僅計費用
-  quotes?: Record<string, number>; // 各實驗室報價 (NT$)，如 { SGS: 26400, DEKRA: 35000 }
+  quotes?: Record<string, number>; // 各實驗室報價 (NT$)，由 data/quotes.json 併入
+  quoteNotes?: Record<string, string>; // 各實驗室的計價條件，如「6 cycle：11,800/pcs」
 }
 
 export interface StandardData {

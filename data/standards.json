@@ -1,6 +1,6 @@
 [
     {
-        "_comment": "每個物件代表一個應用標準。categories 的 key 必須與 App 內的 CategoryType 一致。duration 單位為「工作天」(WD)。outsourced=true 代表外測，不佔用自有工期，quotes 為各實驗室報價(NT$)供外測費用估算。天數依 P3 階段基準表。",
+        "_comment": "每個物件代表一個應用標準。categories 的 key 必須與 App 內的 CategoryType 一致。duration 單位為「工作天」(WD)。outsourced=true 代表外測（仍計工期，另計費用）。第三方報價請維護 data/quotes.json，不要寫在這裡。天數依 P3 階段基準表。",
         "id": "moxa",
         "name": "IEC 60068",
         "description": "工業環境驗證基準",
@@ -10,75 +10,43 @@
                 {
                     "id": "m_c1",
                     "name": "High Temperature Operation Test",
-                    "duration": 1,
-                    "quotes": {
-                        "SGS": 4240,
-                        "DEKRA": 4500
-                    }
+                    "duration": 1
                 },
                 {
                     "id": "m_c2",
                     "name": "High Temperature High Humidity Operation Test",
-                    "duration": 1,
-                    "quotes": {
-                        "SGS": 6400,
-                        "DEKRA": 75000
-                    }
+                    "duration": 1
                 },
                 {
                     "id": "m_c3",
                     "name": "Low Temperature Power ON_OFF Test",
-                    "duration": 2.5,
-                    "quotes": {
-                        "SGS": 11440,
-                        "DEKRA": 15000
-                    }
+                    "duration": 2.5
                 },
                 {
                     "id": "m_c4",
                     "name": "High Temperature Power ON_OFF Test",
-                    "duration": 1,
-                    "quotes": {
-                        "SGS": 3700,
-                        "DEKRA": 3750
-                    }
+                    "duration": 1
                 },
                 {
                     "id": "m_c5",
                     "name": "Temperature Cycle Operation Test",
-                    "duration": 2.5,
-                    "quotes": {
-                        "SGS": 9280,
-                        "DEKRA": 14000
-                    }
+                    "duration": 2.5
                 },
                 {
                     "id": "m_c6",
                     "name": "High Temperature High Humidity Storage Test",
-                    "duration": 2,
-                    "quotes": {
-                        "SGS": 6120,
-                        "DEKRA": 8000
-                    }
+                    "duration": 2
                 },
                 {
                     "id": "m_c7",
                     "name": "Low Temperature Storage Test",
-                    "duration": 2,
-                    "quotes": {
-                        "SGS": 4860,
-                        "DEKRA": 6500
-                    }
+                    "duration": 2
                 },
                 {
                     "id": "m_c8",
                     "name": "Altitude test",
                     "duration": 2,
-                    "outsourced": true,
-                    "quotes": {
-                        "SGS": 26400,
-                        "DEKRA": 35000
-                    }
+                    "outsourced": true
                 },
                 {
                     "id": "m_c9",
@@ -95,37 +63,22 @@
                 {
                     "id": "m_v1",
                     "name": "Endurance (Sine Vib)",
-                    "duration": 1,
-                    "quotes": {
-                        "SGS": 15600,
-                        "DEKRA": 15600
-                    }
+                    "duration": 1
                 },
                 {
                     "id": "m_v2",
                     "name": "Random test (Rand Vib)",
-                    "duration": 1,
-                    "quotes": {
-                        "SGS": 9750,
-                        "DEKRA": 7600
-                    }
+                    "duration": 1
                 },
                 {
                     "id": "m_v3",
                     "name": "Shock Test (Half sine)",
-                    "duration": 1,
-                    "quotes": {
-                        "SGS": 4000,
-                        "DEKRA": 5000
-                    }
+                    "duration": 1
                 },
                 {
                     "id": "m_v4",
                     "name": "PKG Vib",
-                    "duration": 1,
-                    "quotes": {
-                        "SGS": 4500
-                    }
+                    "duration": 1
                 },
                 {
                     "id": "m_v5",
@@ -137,110 +90,71 @@
                 {
                     "id": "m_ip2x",
                     "name": "IP 2X",
-                    "duration": 1,
-                    "quotes": {
-                        "SGS": 3000
-                    }
+                    "duration": 1
                 },
                 {
                     "id": "m_ip3x",
                     "name": "IP 3X",
-                    "duration": 1,
-                    "quotes": {
-                        "SGS": 3000
-                    }
+                    "duration": 1
                 },
                 {
                     "id": "m_ip4x",
                     "name": "IP 4X",
-                    "duration": 1,
-                    "quotes": {
-                        "SGS": 3000
-                    }
+                    "duration": 1
                 },
                 {
                     "id": "m_ip5x",
                     "name": "IP 5X",
-                    "duration": 2,
-                    "quotes": {
-                        "SGS": 9000
-                    }
+                    "duration": 2
                 },
                 {
                     "id": "m_ip6x",
                     "name": "IP 6X",
-                    "duration": 3.5,
-                    "quotes": {
-                        "SGS": 9000
-                    }
+                    "duration": 3.5
                 }
             ],
             "防水測試": [
                 {
                     "id": "m_ipx2",
                     "name": "IP X2",
-                    "duration": 2,
-                    "quotes": {
-                        "SGS": 5000
-                    }
+                    "duration": 1
                 },
                 {
                     "id": "m_ipx3",
                     "name": "IP X3",
-                    "duration": 2,
-                    "quotes": {
-                        "SGS": 5000
-                    }
+                    "duration": 2
                 },
                 {
                     "id": "m_ipx4",
                     "name": "IP X4",
-                    "duration": 2,
-                    "quotes": {
-                        "SGS": 5000
-                    }
+                    "duration": 2
                 },
                 {
                     "id": "m_ipx5",
                     "name": "IP X5",
-                    "duration": 4.5,
-                    "quotes": {
-                        "SGS": 5000
-                    }
+                    "duration": 4.5
                 },
                 {
                     "id": "m_ipx6",
                     "name": "IP X6",
-                    "duration": 4.5,
-                    "quotes": {
-                        "SGS": 5000
-                    }
+                    "duration": 4.5
                 },
                 {
                     "id": "m_ipx7",
                     "name": "IP X7",
-                    "duration": 4.5,
-                    "quotes": {
-                        "SGS": 5000
-                    }
+                    "duration": 4.5
                 },
                 {
                     "id": "m_ipx8",
                     "name": "IP X8",
-                    "duration": 4.5,
-                    "quotes": {
-                        "SGS": 10000
-                    }
+                    "duration": 4.5
                 }
             ],
             "其他測試": [
                 {
                     "id": "m_o1",
                     "name": "Salt mist test",
-                    "duration": 3.5,
-                    "quotes": {
-                        "SGS": 3200
-                    }
+                    "duration": 3.5
                 },
                 {
                     "id": "m_o2",
@@ -260,27 +174,17 @@
                 {
                     "id": "r_c1",
                     "name": "Low Temperature Start-up Test",
-                    "duration": 2,
-                    "quotes": {
-                        "SGS": 7680
-                    }
+                    "duration": 2
                 },
                 {
                     "id": "r_c2",
                     "name": "Dry Heat Thermal Test",
-                    "duration": 2,
-                    "quotes": {
-                        "SGS": 9600
-                    }
+                    "duration": 2
                 },
                 {
                     "id": "r_c3",
                     "name": "Cyclic Damp Heat Test (含前 IR、Hi-Pot、IR)",
-                    "duration": 6,
-                    "quotes": {
-                        "SGS": 21960,
-                        "DEKRA": 17440
-                    }
+                    "duration": 6
                 },
                 {
                     "id": "r_c4",
@@ -297,26 +201,17 @@
                 {
                     "id": "r_v1",
                     "name": "LongLife Test (Rand Vib)",
-                    "duration": 1,
-                    "quotes": {
-                        "SGS": 37750
-                    }
+                    "duration": 1
                 },
                 {
                     "id": "r_v2",
                     "name": "Shock Testing (Half sine)",
-                    "duration": 1,
-                    "quotes": {
-                        "SGS": 7250
-                    }
+                    "duration": 1
                 },
                 {
                     "id": "r_v3",
                     "name": "Functional Test (Rand Vib)",
-                    "duration": 1,
-                    "quotes": {
-                        "SGS": 6000
-                    }
+                    "duration": 1
                 }
             ]
         }
@@ -487,22 +382,14 @@
                 {
                     "id": "p_v5",
                     "name": "NOP Bump test",
-                    "duration": 1,
-                    "outsourced": true,
-                    "quotes": {
-                        "SGS": 38500,
-                        "KDI": 13000
-                    }
+                    "duration": 3,
+                    "outsourced": true
                 },
                 {
                     "id": "p_v6",
                     "name": "OP Seismic",
                     "duration": 2,
-                    "outsourced": true,
-                    "quotes": {
-                        "SGS": 4800,
-                        "KDI": 3200
-                    }
+                    "outsourced": true
                 }
             ]
         }

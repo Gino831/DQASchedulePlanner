@@ -1,0 +1,362 @@
+{
+    "_comment": "第三方實驗室報價，與 data/standards.json 分開維護。鍵為測項 id（對應 standards.json 內的 id）。price 單位為 NT$/pcs；note 記錄計價條件。只改價格時請只動這個檔，不要動 standards.json。",
+    "updated": "2026-08-13",
+    "currency": "TWD",
+    "quotes": {
+        "m_c1": [
+            {
+                "vendor": "SGS",
+                "price": 4420
+            },
+            {
+                "vendor": "DEKRA",
+                "price": 4500
+            }
+        ],
+        "m_c2": [
+            {
+                "vendor": "SGS",
+                "price": 6580
+            },
+            {
+                "vendor": "DEKRA",
+                "price": 75000
+            }
+        ],
+        "m_c3": [
+            {
+                "vendor": "SGS",
+                "price": 11440,
+                "note": "on/off 需要額外人工操作，會加收費用"
+            },
+            {
+                "vendor": "DEKRA",
+                "price": 15000
+            }
+        ],
+        "m_c4": [
+            {
+                "vendor": "SGS",
+                "price": 3700
+            },
+            {
+                "vendor": "DEKRA",
+                "price": 3750
+            }
+        ],
+        "m_c5": [
+            {
+                "vendor": "SGS",
+                "price": 13800,
+                "note": "6 cycle：11,800/pcs；8 cycle：13,800/pcs"
+            },
+            {
+                "vendor": "DEKRA",
+                "price": 14000
+            }
+        ],
+        "m_c6": [
+            {
+                "vendor": "SGS",
+                "price": 6120
+            },
+            {
+                "vendor": "DEKRA",
+                "price": 8000
+            }
+        ],
+        "m_c7": [
+            {
+                "vendor": "SGS",
+                "price": 5220
+            },
+            {
+                "vendor": "DEKRA",
+                "price": 6500
+            }
+        ],
+        "m_c8": [
+            {
+                "vendor": "SGS",
+                "price": 26400
+            },
+            {
+                "vendor": "DEKRA",
+                "price": 35000
+            }
+        ],
+        "m_v1": [
+            {
+                "vendor": "SGS",
+                "price": 15600
+            },
+            {
+                "vendor": "DEKRA",
+                "price": 15600
+            }
+        ],
+        "m_v2": [
+            {
+                "vendor": "SGS",
+                "price": 9750
+            },
+            {
+                "vendor": "DEKRA",
+                "price": 7600
+            }
+        ],
+        "m_v3": [
+            {
+                "vendor": "SGS",
+                "price": 4000
+            },
+            {
+                "vendor": "DEKRA",
+                "price": 5000
+            }
+        ],
+        "m_v4": [
+            {
+                "vendor": "SGS",
+                "price": 4500
+            }
+        ],
+        "m_ip2x": [
+            {
+                "vendor": "SGS",
+                "price": 3000
+            }
+        ],
+        "m_ip3x": [
+            {
+                "vendor": "SGS",
+                "price": 3000
+            }
+        ],
+        "m_ip4x": [
+            {
+                "vendor": "SGS",
+                "price": 3000
+            }
+        ],
+        "m_ip5x": [
+            {
+                "vendor": "SGS",
+                "price": 9000
+            }
+        ],
+        "m_ip6x": [
+            {
+                "vendor": "SGS",
+                "price": 9000
+            }
+        ],
+        "m_ipx2": [
+            {
+                "vendor": "SGS",
+                "price": 5000
+            }
+        ],
+        "m_ipx3": [
+            {
+                "vendor": "SGS",
+                "price": 5000
+            }
+        ],
+        "m_ipx4": [
+            {
+                "vendor": "SGS",
+                "price": 5000
+            }
+        ],
+        "m_ipx5": [
+            {
+                "vendor": "SGS",
+                "price": 5000
+            }
+        ],
+        "m_ipx6": [
+            {
+                "vendor": "SGS",
+                "price": 5000
+            }
+        ],
+        "m_ipx7": [
+            {
+                "vendor": "SGS",
+                "price": 5000
+            }
+        ],
+        "m_ipx8": [
+            {
+                "vendor": "SGS",
+                "price": 10000
+            }
+        ],
+        "m_o1": [
+            {
+                "vendor": "SGS",
+                "price": 6200
+            }
+        ],
+        "r_c1": [
+            {
+                "vendor": "SGS",
+                "price": 9120
+            }
+        ],
+        "r_c2": [
+            {
+                "vendor": "SGS",
+                "price": 9120
+            }
+        ],
+        "r_c3": [
+            {
+                "vendor": "SGS",
+                "price": 19440,
+                "note": "NT$2,000.-/前 10 個量測點 + NT$120.-/之後每一個量測點"
+            }
+        ],
+        "r_v1": [
+            {
+                "vendor": "SGS",
+                "price": 38750
+            }
+        ],
+        "r_v2": [
+            {
+                "vendor": "SGS",
+                "price": 8000
+            }
+        ],
+        "r_v3": [
+            {
+                "vendor": "SGS",
+                "price": 12750
+            }
+        ],
+        "mr_v1": [
+            {
+                "vendor": "SGS",
+                "price": 21600,
+                "note": "共振搜尋：NT$7,800.-/pcs（含一顆加速規）；共振駐留：NT$13,800.-/pcs（假設每軸各有一個共振點）"
+            }
+        ],
+        "mr45_c1": [
+            {
+                "vendor": "SGS",
+                "price": 5860
+            }
+        ],
+        "mr45_c2": [
+            {
+                "vendor": "SGS",
+                "price": 6760
+            }
+        ],
+        "mr45_c3": [
+            {
+                "vendor": "SGS",
+                "price": 6040
+            }
+        ],
+        "mr45_v1": [
+            {
+                "vendor": "SGS",
+                "price": 21600,
+                "note": "共振搜尋：NT$7,800.-/pcs（含一顆加速規）；共振駐留：NT$13,800.-/pcs（假設每軸各有一個共振點）"
+            }
+        ],
+        "p_c1": [
+            {
+                "vendor": "SGS",
+                "price": 6220
+            }
+        ],
+        "p_c2": [
+            {
+                "vendor": "SGS",
+                "price": 6220
+            }
+        ],
+        "p_c3": [
+            {
+                "vendor": "SGS",
+                "price": 28720
+            }
+        ],
+        "p_c4": [
+            {
+                "vendor": "SGS",
+                "price": 46000
+            }
+        ],
+        "p_c5": [
+            {
+                "vendor": "SGS",
+                "price": 12160
+            }
+        ],
+        "p_c6": [
+            {
+                "vendor": "SGS",
+                "price": 5220
+            }
+        ],
+        "p_c7": [
+            {
+                "vendor": "SGS",
+                "price": 5220
+            }
+        ],
+        "p_v1": [
+            {
+                "vendor": "SGS",
+                "price": 6800
+            }
+        ],
+        "p_v2": [
+            {
+                "vendor": "SGS",
+                "price": 16400
+            }
+        ],
+        "p_v3": [
+            {
+                "vendor": "SGS",
+                "price": 4000
+            }
+        ],
+        "p_v4": [
+            {
+                "vendor": "SGS",
+                "price": 3000
+            }
+        ],
+        "p_v5": [
+            {
+                "vendor": "SGS",
+                "price": 22000,
+                "note": "class 2"
+            },
+            {
+                "vendor": "KDI",
+                "price": 13000,
+                "note": "class 2"
+            }
+        ],
+        "p_v6": [
+            {
+                "vendor": "SGS",
+                "price": 4800,
+                "note": "class 2"
+            },
+            {
+                "vendor": "KDI",
+                "price": 3200,
+                "note": "class 2"
+            }
+        ]
+    }
+}

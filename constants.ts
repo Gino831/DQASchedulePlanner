@@ -1,6 +1,7 @@
 
 import { CategoryType, StandardData } from './types';
 import rawStandards from './data/standards.json';
+import rawQuotes from './data/quotes.json';
 
 // GitHub raw URL — 從此處動態載入最新測項資料
 // 任何人在 GitHub 上編輯 data/standards.json 後，下次開啟 App 即生效
@@ -52,13 +53,32 @@ const mergeMandatory = (standard: StandardData): StandardData => {
   return { ...standard, categories: newCategories };
 };
 
+// 第三方報價：獨立維護於 data/quotes.json，載入測項時才併入。
+// 分開的用意是報價異動不必動到測項定義檔，兩者的變更歷史也才分得清楚。
+const QUOTE_MAP: Record<string, Array<{ vendor: string; price: number; note?: string }>> =
+  (rawQuotes as any).quotes || {};
+export const QUOTES_UPDATED_AT: string = (rawQuotes as any).updated || '';
+
+// 將 quotes.json 的陣列格式轉為 App 內部使用的 { 實驗室: 價格 } 與註記
+const attachQuotes = (item: any) => {
+  const list = QUOTE_MAP[item.id];
+  if (!list || list.length === 0) return item;
+  const quotes: Record<string, number> = {};
+  const quoteNotes: Record<string, string> = {};
+  list.forEach(q => {
+    quotes[q.vendor] = q.price;
+    if (q.note) quoteNotes[q.vendor] = q.note;
+  });
+  return { ...item, quotes, ...(Object.keys(quoteNotes).length ? { quoteNotes } : {}) };
+};
+
 // 將 JSON 原始資料轉換為 App 所需的 StandardData 格式
-// （自動補上 category 欄位，編輯者不需手動填寫）
+// （自動補上 category 欄位與第三方報價，編輯者不需手動填寫）
 const parseRawStandards = (rawData: any[]): StandardData[] => {
   return rawData.map(raw => {
     const categories: StandardData['categories'] = {};
     Object.entries(raw.categories || {}).forEach(([catKey, items]) => {
-      categories[catKey as CategoryType] = (items as any[]).map(item => ({
+      categories[catKey as CategoryType] = (items as any[]).map(item => attachQuotes({
         ...item,
         category: catKey as CategoryType,
       }));
@@ -118,11 +138,18 @@ export const mergeLocalWithRemote = (
               // 本地新增的測項
               rItems.push(lItem);
             } else {
-              // 本地修改過的測項（名稱、類別等）；天數預設鎖定為遠端佈達值
+              // 本地修改過的測項（名稱、類別等）；天數預設鎖定為遠端佈達值。
+              // 報價一律以現行來源為準：本地快取的舊價會蓋掉新報價，
+              // 使 quotes.json 的更新對既有使用者失效。
               const remoteItem = rItems[rItemIdx];
-              rItems[rItemIdx] = allowLocalDuration
-                ? { ...remoteItem, ...lItem }
-                : { ...remoteItem, ...lItem, duration: remoteItem.duration };
+              const { quotes: _lq, quoteNotes: _ln, ...localRest } = lItem as any;
+              rItems[rItemIdx] = {
+                ...remoteItem,
+                ...localRest,
+                ...(allowLocalDuration ? { duration: (lItem as any).duration ?? remoteItem.duration } : { duration: remoteItem.duration }),
+                quotes: remoteItem.quotes,
+                quoteNotes: remoteItem.quoteNotes,
+              };
             }
           });
           remoteCategories[cat] = rItems;

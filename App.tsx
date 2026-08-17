@@ -1535,6 +1535,12 @@ const App: React.FC = () => {
                                             </span>
                                           )}
                                         </p>
+                                        {/* 計價條件：如「6 cycle：11,800/pcs」「前 10 個量測點...」 */}
+                                        {item.quoteNotes && Object.entries(item.quoteNotes).map(([v, note]) => (
+                                          <p key={v} className="text-[9px] text-amber-700/70 mt-0.5 leading-snug">
+                                            ⓘ {v}：{note}
+                                          </p>
+                                        ))}
                                       </div>
                                       <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm' : 'border-slate-200'}`}>
                                         {isSelected && <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg>}
