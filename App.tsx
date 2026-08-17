@@ -813,6 +813,7 @@ const App: React.FC = () => {
       //   串聯 = 一台一輪；並聯 = 依「同時可安裝台數」分輪，輪數 = ceil(台數 / 可安裝數)。
       // Marine 一律串聯。
       const mechRows: any[] = [];
+      let mechSharedWithEnv = false;
       if (model.mechSampleCount > 0 && (mechSegments.length > 0 || mechBfDays > 0)) {
         const totalMech = Math.max(1, model.mechSampleCount);
         const mechBfSeg = (): Seg[] => mechBfDays > 0 ? [{
@@ -835,7 +836,30 @@ const App: React.FC = () => {
         // 設備時間軸起點：接續前一個型號，避免跨型號搶同一台振動台
         let blockStart = Math.max(baseStartDay + mechBfDays, globalLastMechEndDay);
 
-        if (activeMechStds.length === 0) {
+        // 總程串聯時，Chamber 與 S&V 樣品共用：S&V 不另配樣品，
+        // 直接接在 ENV 樣品做完所有 Chamber 測試（含外測與 RF 後量測）之後。
+        // 總程並聯（預設）時兩者不共用，各自獨立配置樣品。
+        const envOnlyRows = envRows.filter(r => r.trackLabel === 'ENV');
+        const shareEnvSv = strategy === ExecutionStrategy.SERIAL && envOnlyRows.length > 0;
+
+        if (shareEnvSv && activeMechStds.length > 0) {
+          const n = activeMechStds.length;
+          const perStd = activeMechStds.map((_, idx) =>
+            Math.floor(totalMech / n) + (idx < totalMech % n ? 1 : 0));
+          let slot = 0;
+          activeMechStds.forEach((stdData, sIdx) => {
+            for (let i = 0; i < perStd[sIdx]; i++) {
+              // 依序輪流掛到各 ENV 樣品上
+              const target = envOnlyRows[slot % envOnlyRows.length];
+              target.segments.push(...stdData.segs.map(seg => ({ ...seg })));
+              target.totalDays += stdData.days;
+              slot++;
+            }
+          });
+          // 讓後續 IP 串聯仍能找到接續對象（共用後 S&V 就在 ENV 樣品上）
+          mechRows.push(...envOnlyRows);
+          mechSharedWithEnv = true;
+        } else if (activeMechStds.length === 0) {
           // 只有 BF 沒有 S&V 測項時，仍配置樣品以呈現 BF
           for (let i = 0; i < totalMech; i++) pushMechRow(mechBfSeg(), mechBfDays);
         } else {
@@ -1006,7 +1030,9 @@ const App: React.FC = () => {
       const storageExtraUnits = storageIsParallel ? 1 : 0;
       // IP 並聯才額外消耗樣品；串聯沿用 S&V 樣品（無 S&V 可接時退回 1 台）
       const ipExtraUnits = ipOtherSegments.length > 0 ? (ipIsParallel ? ipDutCount : ipFallbackUnits) : 0;
-      const modelTotalUnits = model.envSampleCount + model.mechSampleCount + pkgExtraUnits + storageExtraUnits + ipExtraUnits + outsourcedFallbackUnits;
+      // 總程串聯時 S&V 共用 ENV 樣品，不額外計入樣品數
+      const mechExtraUnits = mechSharedWithEnv ? 0 : model.mechSampleCount;
+      const modelTotalUnits = model.envSampleCount + mechExtraUnits + pkgExtraUnits + storageExtraUnits + ipExtraUnits + outsourcedFallbackUnits;
       globalTotalUnits += modelTotalUnits;
 
       allDutRows.push(...modelDuts);
