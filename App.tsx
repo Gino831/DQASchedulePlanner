@@ -95,7 +95,9 @@ const STANDARD_FIXED_COLORS: Record<string, { bg: string, text: string, label: s
   moxa: { bg: 'bg-indigo-600', text: 'text-white', label: 'Moxa' },
   railway: { bg: 'bg-amber-500', text: 'text-white', label: 'Railway' },
   marine: { bg: 'bg-cyan-500', text: 'text-white', label: 'Marine' },
+  marine_60945: { bg: 'bg-sky-600', text: 'text-white', label: 'Marine 60945' },
   power: { bg: 'bg-emerald-500', text: 'text-white', label: 'Power' },
+  ieee1613: { bg: 'bg-rose-500', text: 'text-white', label: 'IEEE 1613' },
 };
 
 // 側欄圖示色（與 STANDARD_FIXED_COLORS 一致）
@@ -103,7 +105,9 @@ const APP_COLORS: Record<string, string> = {
   moxa: 'bg-indigo-600',
   railway: 'bg-amber-500',
   marine: 'bg-cyan-500',
+  marine_60945: 'bg-sky-600',
   power: 'bg-emerald-500',
+  ieee1613: 'bg-rose-500',
   default: 'bg-slate-500',
   pkg_prep: 'bg-slate-200',
   pkg_item: 'bg-slate-800'

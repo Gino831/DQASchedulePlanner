@@ -393,5 +393,25 @@
                 }
             ]
         }
+    },
+    {
+        "id": "ieee1613",
+        "name": "IEEE 1613",
+        "description": "變電站通訊設備環境要求",
+        "icon": "bolt",
+        "categories": {
+            "振動衝擊應用": [
+                {
+                    "id": "ie_v1",
+                    "name": "Operation Vibration",
+                    "duration": 1
+                },
+                {
+                    "id": "ie_v2",
+                    "name": "Free Fall",
+                    "duration": 1
+                }
+            ]
+        }
     }
 ]

@@ -357,6 +357,18 @@
                 "price": 3200,
                 "note": "class 2"
             }
+        ],
+        "ie_v1": [
+            {
+                "vendor": "SGS",
+                "price": 4800
+            }
+        ],
+        "ie_v2": [
+            {
+                "vendor": "SGS",
+                "price": 2500
+            }
         ]
     }
 }
