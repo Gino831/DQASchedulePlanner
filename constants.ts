@@ -24,31 +24,37 @@ export const DEFAULT_MANDATORY_TESTS = {
   ]
 };
 
+// 各標準需要哪些基礎測項（BF）。未列出者採 DEFAULT_MANDATORY_IDS。
+// 包裝與 IP 已從 IEC 60068 獨立成 ISTA / IEC 60529，兩者的 BF 需求與環境測試不同：
+//   ISTA     只需 PKG 的 Basic Function
+//   IEC 60529 依基準表不含 Basic Function
+const MANDATORY_BY_STANDARD: Record<string, string[]> = {
+  ista: ['default_bf_pkg'],
+  iec60529: [],
+};
+const DEFAULT_MANDATORY_IDS = ['default_bf_env', 'default_bf_mech'];
+
 // 合併必要基礎測項到各標準
 const mergeMandatory = (standard: StandardData): StandardData => {
   const newCategories = { ...standard.categories };
+  const wanted = MANDATORY_BY_STANDARD[standard.id] ?? DEFAULT_MANDATORY_IDS;
+  const pick = (items: any[]) => items
+    .filter(item => wanted.includes(item.id))
+    .map(item => ({ ...item, id: `${standard.id}_${item.id}` }));
 
-  // 處理 Function 類別 (Chamber / PKG Track)
+  // Function 類別（Chamber / PKG Track 的 BF）
+  const mandatoryFunc = pick(DEFAULT_MANDATORY_TESTS[CategoryType.FUNCTION]);
   const existingFunc = newCategories[CategoryType.FUNCTION] || [];
-  const mandatoryFunc = DEFAULT_MANDATORY_TESTS[CategoryType.FUNCTION]
-    .filter(item => {
-      // 只有 Moxa 才強制包含 PKG 的 Basic Function
-      if (item.id === 'default_bf_pkg') return standard.id === 'moxa';
-      return true;
-    })
-    .map(item => ({
-      ...item,
-      id: `${standard.id}_${item.id}`
-    }));
-  newCategories[CategoryType.FUNCTION] = [...mandatoryFunc, ...existingFunc];
+  if (mandatoryFunc.length > 0 || existingFunc.length > 0) {
+    newCategories[CategoryType.FUNCTION] = [...mandatoryFunc, ...existingFunc];
+  }
 
-  // 處理 Vib/Shock 類別 (S&V)
+  // Vib/Shock 類別（S&V 的 BF）
+  const mandatoryVib = pick(DEFAULT_MANDATORY_TESTS[CategoryType.VIB_SHOCK]);
   const existingVib = newCategories[CategoryType.VIB_SHOCK] || [];
-  const mandatoryVib = DEFAULT_MANDATORY_TESTS[CategoryType.VIB_SHOCK].map(item => ({
-    ...item,
-    id: `${standard.id}_${item.id}`
-  }));
-  newCategories[CategoryType.VIB_SHOCK] = [...mandatoryVib, ...existingVib];
+  if (mandatoryVib.length > 0 || existingVib.length > 0) {
+    newCategories[CategoryType.VIB_SHOCK] = [...mandatoryVib, ...existingVib];
+  }
 
   return { ...standard, categories: newCategories };
 };

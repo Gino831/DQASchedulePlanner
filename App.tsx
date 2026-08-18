@@ -40,12 +40,10 @@ const getDefaultSelectedTests = (standards: StandardData[]): Record<string, Reco
         'm_v1', // Endurance vibration (Sine)
         'm_v2', // Random vibration test
         'm_v3', // Shock test (half sine)
-        'm_v4', // PKG Vib
-        'm_v5', // PKG Drop
+        // PKG Vib / PKG Drop 已獨立至 ISTA 標準
 
         // 功能測試
         'moxa_default_bf_env', // Basic Function (Env) - mandatory
-        'moxa_default_bf_pkg', // Basic Function (PKG) - mandatory
 
         // 防塵測試 - 不選
         // 防水測試 - 不選
@@ -98,6 +96,8 @@ const STANDARD_FIXED_COLORS: Record<string, { bg: string, text: string, label: s
   marine_60945: { bg: 'bg-sky-600', text: 'text-white', label: 'Marine 60945' },
   power: { bg: 'bg-emerald-500', text: 'text-white', label: 'Power' },
   ieee1613: { bg: 'bg-rose-500', text: 'text-white', label: 'IEEE 1613' },
+  ista: { bg: 'bg-orange-600', text: 'text-white', label: 'ISTA' },
+  iec60529: { bg: 'bg-teal-600', text: 'text-white', label: 'IEC 60529' },
 };
 
 // 側欄圖示色（與 STANDARD_FIXED_COLORS 一致）
@@ -108,6 +108,8 @@ const APP_COLORS: Record<string, string> = {
   marine_60945: 'bg-sky-600',
   power: 'bg-emerald-500',
   ieee1613: 'bg-rose-500',
+  ista: 'bg-orange-600',
+  iec60529: 'bg-teal-600',
   default: 'bg-slate-500',
   pkg_prep: 'bg-slate-200',
   pkg_item: 'bg-slate-800'
