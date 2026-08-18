@@ -162,9 +162,9 @@ export const mergeLocalWithRemote = (
         }
       });
 
-      // 保留本地對於該標準名稱/圖示的修改
-      remoteStd.name = localStd.name || remoteStd.name;
-      remoteStd.icon = localStd.icon || remoteStd.icon;
+      // 標準名稱與圖示一律以佈達版為準。
+      // 原本讓本地覆蓋，導致 Lab TA 改名後既有使用者永遠看到舊名稱
+      // （例：已佈達為 IEC 60068，畫面仍顯示 Moxa Industrial）。
       remoteStd.categories = remoteCategories;
 
       merged[remoteStdIdx] = remoteStd;
